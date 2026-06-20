@@ -1,74 +1,143 @@
 services:
-  postgres:
+  init-db:
     image: postgres:16-alpine
-    container_name: qltc-postgres-prod
-    restart: unless-stopped
+    container_name: qltc-init-db-prod
+    restart: "no"
+
+    env_file:
+      - .env.prod
 
     environment:
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      DB_HOST: "${DB_HOST}"
+      DB_PORT: "${DB_PORT}"
+      DB_USERNAME: "${DB_USERNAME}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_NAME: "${DB_NAME}"
 
-    volumes:
-      - qltc-postgres-prod-data:/var/lib/postgresql/data
+    command:
+      - /bin/sh
+      - -ec
+      - |
+          echo "Dang cho PostgreSQL san sang..."
 
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+          until PGPASSWORD="$$DB_PASSWORD" pg_isready \
+            -h "$$DB_HOST" \
+            -p "$$DB_PORT" \
+            -U "$$DB_USERNAME"; do
+            sleep 2
+          done
+
+          echo "PostgreSQL da san sang."
+
+          DATABASE_EXISTS="$$(PGPASSWORD="$$DB_PASSWORD" psql \
+            -h "$$DB_HOST" \
+            -p "$$DB_PORT" \
+            -U "$$DB_USERNAME" \
+            -d postgres \
+            -v dbname="$$DB_NAME" \
+            -tAc "SELECT 1 FROM pg_database WHERE datname = :'dbname';")"
+
+          if [ "$$DATABASE_EXISTS" = "1" ]; then
+            echo "Database $$DB_NAME da ton tai."
+          else
+            echo "Dang tao database $$DB_NAME..."
+
+            PGPASSWORD="$$DB_PASSWORD" psql \
+              -h "$$DB_HOST" \
+              -p "$$DB_PORT" \
+              -U "$$DB_USERNAME" \
+              -d postgres \
+              -v ON_ERROR_STOP=1 \
+              -v dbname="$$DB_NAME" \
+              -c 'CREATE DATABASE :"dbname";'
+
+            echo "Da tao database $$DB_NAME."
+          fi
+
+    networks:
+      - shared-database-network-prod
 
   backend:
     container_name: qltc-backend-prod
     restart: unless-stopped
+    init: true
 
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
 
     env_file:
-      - .env
+      - .env.prod
 
     environment:
       NODE_ENV: production
-      PORT: ${BE_PORT}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_SYNC: "false"
+      PORT: "${BE_PORT}"
+      DB_HOST: "${DB_HOST}"
+      DB_PORT: "${DB_PORT}"
+      DB_USERNAME: "${DB_USERNAME}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_NAME: "${DB_NAME}"
+      DB_SYNC: "${DB_SYNC}"
+      FRONTEND_URL: "${FRONTEND_URL}"
 
     ports:
-      - "${BE_PORT}:${BE_PORT}"
+      - "127.0.0.1:${BE_PORT}:${BE_PORT}"
 
     depends_on:
-      postgres:
-        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+
+    networks:
+      - qltc-network-prod
+      - shared-database-network-prod
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   frontend:
     container_name: qltc-frontend-prod
     restart: unless-stopped
+    init: true
 
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL}"
 
     env_file:
-      - .env
+      - .env.prod
 
     environment:
       NODE_ENV: production
-      PORT: ${FE_PORT}
+      PORT: "${FE_PORT}"
+      NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL}"
 
     ports:
-      - "${FE_PORT}:${FE_PORT}"
+      - "127.0.0.1:${FE_PORT}:${FE_PORT}"
 
     depends_on:
-      - backend
+      backend:
+        condition: service_started
 
-volumes:
-  qltc-postgres-prod-data:
+    networks:
+      - qltc-network-prod
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  qltc-network-prod:
+    name: qltc-network-prod
+    driver: bridge
+
+  shared-database-network-prod:
+    external: true
+    name: shared-database-network-prod
