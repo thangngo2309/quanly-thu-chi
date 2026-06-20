@@ -38,3 +38,19 @@ export type Sale = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type SalesSearchValues = {
+  q: string;
+  paymentStatus: '' | PaymentStatus;
+  fromDate: string;
+  toDate: string;
+};
+
+export type SalesQueryParams = {
+  page: number;
+  limit: number;
+  q?: string;
+  paymentStatus?: PaymentStatus;
+  fromDate?: string;
+  toDate?: string;
+};
