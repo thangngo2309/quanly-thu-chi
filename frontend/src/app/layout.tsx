@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
+
+import { AppNavigation } from '@/components/layout/AppNavigation';
 
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'Quản lý thu chi',
-  description: 'Quản lý doanh thu, công nợ và chi phí',
+  description:
+    'Quản lý doanh thu, công nợ và chi phí',
 };
 
 type RootLayoutProps = {
@@ -19,9 +21,11 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body>
-        <AppRouterCacheProvider>
-          <Providers>{children}</Providers>
-        </AppRouterCacheProvider>
+        <Providers>
+          <AppNavigation />
+
+          {children}
+        </Providers>
       </body>
     </html>
   );
