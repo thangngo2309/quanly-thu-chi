@@ -1,0 +1,172 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+import { PaymentStatus } from '../common/enums/payment-status.enum';
+import { CreateSaleDto } from './dto/create-sale.dto';
+import { QuerySalesDto } from './dto/query-sales.dto';
+import { UpdateSaleDto } from './dto/update-sale.dto';
+import { Sale } from './entities/sale.entity';
+
+@Injectable()
+export class SalesService {
+  constructor(
+    @InjectRepository(Sale)
+    private readonly saleRepository: Repository<Sale>,
+  ) {}
+
+  async create(createSaleDto: CreateSaleDto): Promise<Sale> {
+    const totalAmount = Number(createSaleDto.totalAmount);
+    const paidAmount = Number(createSaleDto.paidAmount ?? 0);
+
+    this.validateAmounts(totalAmount, paidAmount);
+
+    const sale = this.saleRepository.create({
+      customerName: createSaleDto.customerName.trim(),
+      content: createSaleDto.content.trim(),
+      totalAmount,
+      paidAmount,
+      remainingAmount: totalAmount - paidAmount,
+      paymentStatus: this.resolvePaymentStatus(totalAmount, paidAmount),
+      saleDate: createSaleDto.saleDate ?? new Date().toISOString().slice(0, 10),
+      note: createSaleDto.note?.trim() || null,
+    });
+
+    return this.saleRepository.save(sale);
+  }
+
+  async findAll(query: QuerySalesDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+
+    const queryBuilder = this.saleRepository.createQueryBuilder('sale');
+
+    if (query.q?.trim()) {
+      queryBuilder.andWhere(
+        `(
+            sale.customerName ILIKE :keyword
+            OR sale.content ILIKE :keyword
+            OR sale.note ILIKE :keyword
+          )`,
+        {
+          keyword: `%${query.q.trim()}%`,
+        },
+      );
+    }
+
+    if (query.paymentStatus) {
+      queryBuilder.andWhere('sale.paymentStatus = :paymentStatus', {
+        paymentStatus: query.paymentStatus,
+      });
+    }
+
+    if (query.fromDate) {
+      queryBuilder.andWhere('sale.saleDate >= :fromDate', {
+        fromDate: query.fromDate,
+      });
+    }
+
+    if (query.toDate) {
+      queryBuilder.andWhere('sale.saleDate <= :toDate', {
+        toDate: query.toDate,
+      });
+    }
+
+    queryBuilder
+      .orderBy('sale.saleDate', 'DESC')
+      .addOrderBy('sale.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOne(id: string): Promise<Sale> {
+    const sale = await this.saleRepository.findOne({
+      where: {
+        id,
+      },
+    });
+
+    if (!sale) {
+      throw new NotFoundException('Không tìm thấy khoản doanh thu');
+    }
+
+    return sale;
+  }
+
+  async update(id: string, updateSaleDto: UpdateSaleDto): Promise<Sale> {
+    const sale = await this.findOne(id);
+
+    const totalAmount = Number(updateSaleDto.totalAmount ?? sale.totalAmount);
+
+    const paidAmount = Number(updateSaleDto.paidAmount ?? sale.paidAmount);
+
+    this.validateAmounts(totalAmount, paidAmount);
+
+    sale.customerName = updateSaleDto.customerName?.trim() ?? sale.customerName;
+
+    sale.content = updateSaleDto.content?.trim() ?? sale.content;
+
+    sale.totalAmount = totalAmount;
+    sale.paidAmount = paidAmount;
+    sale.remainingAmount = totalAmount - paidAmount;
+
+    sale.paymentStatus = this.resolvePaymentStatus(totalAmount, paidAmount);
+
+    sale.saleDate = updateSaleDto.saleDate ?? sale.saleDate;
+
+    if (updateSaleDto.note !== undefined) {
+      sale.note = updateSaleDto.note?.trim() || null;
+    }
+
+    return this.saleRepository.save(sale);
+  }
+
+  async remove(id: string): Promise<void> {
+    const sale = await this.findOne(id);
+
+    await this.saleRepository.remove(sale);
+  }
+
+  private validateAmounts(totalAmount: number, paidAmount: number): void {
+    if (totalAmount < 0 || paidAmount < 0) {
+      throw new BadRequestException('Số tiền không được nhỏ hơn 0');
+    }
+
+    if (paidAmount > totalAmount) {
+      throw new BadRequestException(
+        'Số tiền đã thanh toán không được lớn hơn tổng tiền',
+      );
+    }
+  }
+
+  private resolvePaymentStatus(
+    totalAmount: number,
+    paidAmount: number,
+  ): PaymentStatus {
+    if (paidAmount <= 0) {
+      return PaymentStatus.UNPAID;
+    }
+
+    if (paidAmount >= totalAmount) {
+      return PaymentStatus.PAID;
+    }
+
+    return PaymentStatus.PARTIAL;
+  }
+}

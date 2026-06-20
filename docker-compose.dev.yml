@@ -1,0 +1,176 @@
+services:
+  postgres:
+    profiles:
+      - local-db
+
+    image: postgres:16-alpine
+    container_name: qltc-postgres-dev
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+
+    ports:
+      - "${DB_PUBLIC_PORT:-5433}:5432"
+
+    volumes:
+      - qltc-postgres-dev-data:/var/lib/postgresql/data
+
+    networks:
+      - qltc-dev-network
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  db-init:
+    image: postgres:16-alpine
+    container_name: qltc-db-init-dev
+    restart: "no"
+
+    env_file:
+      - .env.dev
+
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_ADMIN_DB: ${DB_ADMIN_DB:-postgres}
+
+    command:
+      - sh
+      - -ec
+      - |
+        export PGPASSWORD="$$DB_PASSWORD"
+
+        echo "Đang chờ PostgreSQL tại $$DB_HOST:$$DB_PORT..."
+
+        until pg_isready \
+          -h "$$DB_HOST" \
+          -p "$$DB_PORT" \
+          -U "$$DB_USERNAME"
+        do
+          sleep 2
+        done
+
+        echo "PostgreSQL đã sẵn sàng"
+
+        DATABASE_EXISTS=$$(psql \
+          -h "$$DB_HOST" \
+          -p "$$DB_PORT" \
+          -U "$$DB_USERNAME" \
+          -d "$$DB_ADMIN_DB" \
+          -tAc "SELECT 1 FROM pg_database WHERE datname = '$$DB_NAME'")
+
+        if [ "$$DATABASE_EXISTS" = "1" ]; then
+          echo "Database $$DB_NAME đã tồn tại"
+        else
+          echo "Đang tạo database $$DB_NAME..."
+
+          createdb \
+            -h "$$DB_HOST" \
+            -p "$$DB_PORT" \
+            -U "$$DB_USERNAME" \
+            -O "$$DB_USERNAME" \
+            "$$DB_NAME"
+
+          echo "Đã tạo database $$DB_NAME"
+        fi
+
+    networks:
+      - qltc-dev-network
+      - shared-database-network
+
+  backend:
+    container_name: qltc-backend-dev
+    restart: unless-stopped
+
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+
+    env_file:
+      - .env.dev
+
+    environment:
+      NODE_ENV: development
+      PORT: ${BE_PORT}
+
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SYNC: ${DB_SYNC}
+
+      FRONTEND_URL: ${FRONTEND_URL}
+
+    ports:
+      - "${BE_PORT}:${BE_PORT}"
+
+    volumes:
+      - ./backend:/app
+      - qltc-backend-dev-node-modules:/app/node_modules
+
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
+    networks:
+      - qltc-dev-network
+      - shared-database-network
+
+  frontend:
+    container_name: qltc-frontend-dev
+    restart: unless-stopped
+
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+
+    env_file:
+      - .env.dev
+
+    environment:
+      NODE_ENV: development
+      PORT: ${FE_PORT}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      WATCHPACK_POLLING: "true"
+
+    ports:
+      - "${FE_PORT}:${FE_PORT}"
+
+    volumes:
+      - ./frontend:/app
+      - qltc-frontend-dev-node-modules:/app/node_modules
+      - qltc-frontend-dev-next:/app/.next
+
+    depends_on:
+      - backend
+
+    networks:
+      - qltc-dev-network
+
+volumes:
+  qltc-postgres-dev-data:
+  qltc-backend-dev-node-modules:
+  qltc-frontend-dev-node-modules:
+  qltc-frontend-dev-next:
+
+networks:
+  qltc-dev-network:
+    driver: bridge
+
+  shared-database-network:
+    external: true
+    name: shared-database-network
