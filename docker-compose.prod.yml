@@ -8,50 +8,48 @@ services:
       - .env.prod
 
     environment:
-      DB_HOST: "${DB_HOST}"
-      DB_PORT: "${DB_PORT}"
-      DB_USERNAME: "${DB_USERNAME}"
-      DB_PASSWORD: "${DB_PASSWORD}"
+      PGHOST: "${DB_HOST}"
+      PGPORT: "${DB_PORT}"
+      PGUSER: "${DB_USERNAME}"
+      PGPASSWORD: "${DB_PASSWORD}"
       DB_NAME: "${DB_NAME}"
 
     command:
       - /bin/sh
       - -ec
       - |
-          echo "Dang cho PostgreSQL san sang..."
+          echo "Đang chờ PostgreSQL tại $$PGHOST:$$PGPORT..."
 
-          until PGPASSWORD="$$DB_PASSWORD" pg_isready \
-            -h "$$DB_HOST" \
-            -p "$$DB_PORT" \
-            -U "$$DB_USERNAME"; do
+          until pg_isready \
+            -h "$$PGHOST" \
+            -p "$$PGPORT" \
+            -U "$$PGUSER"; do
             sleep 2
           done
 
-          echo "PostgreSQL da san sang."
+          echo "PostgreSQL đã sẵn sàng."
 
-          DATABASE_EXISTS="$$(PGPASSWORD="$$DB_PASSWORD" psql \
-            -h "$$DB_HOST" \
-            -p "$$DB_PORT" \
-            -U "$$DB_USERNAME" \
+          DATABASE_EXISTS="$$(psql \
+            -h "$$PGHOST" \
+            -p "$$PGPORT" \
+            -U "$$PGUSER" \
             -d postgres \
-            -v dbname="$$DB_NAME" \
-            -tAc "SELECT 1 FROM pg_database WHERE datname = :'dbname';")"
+            -tAc "SELECT 1 FROM pg_database WHERE datname = '$$DB_NAME';")"
 
           if [ "$$DATABASE_EXISTS" = "1" ]; then
-            echo "Database $$DB_NAME da ton tai."
+            echo "Database $$DB_NAME đã tồn tại."
           else
-            echo "Dang tao database $$DB_NAME..."
+            echo "Đang tạo database $$DB_NAME..."
 
-            PGPASSWORD="$$DB_PASSWORD" psql \
-              -h "$$DB_HOST" \
-              -p "$$DB_PORT" \
-              -U "$$DB_USERNAME" \
+            psql \
+              -h "$$PGHOST" \
+              -p "$$PGPORT" \
+              -U "$$PGUSER" \
               -d postgres \
               -v ON_ERROR_STOP=1 \
-              -v dbname="$$DB_NAME" \
-              -c 'CREATE DATABASE :"dbname";'
+              -c "CREATE DATABASE \\"$$DB_NAME\\";"
 
-            echo "Da tao database $$DB_NAME."
+            echo "Đã tạo database $$DB_NAME."
           fi
 
     networks:
