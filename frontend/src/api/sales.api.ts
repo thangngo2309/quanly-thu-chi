@@ -45,3 +45,19 @@ export async function deleteSale(
 ): Promise<void> {
   await api.delete(`/sales/${id}`);
 }
+
+export async function getCustomerSuggestions(
+  q: string,
+  limit = 20,
+): Promise<string[]> {
+  const response = await api.get<
+    string[]
+  >('/sales/customer-suggestions', {
+    params: {
+      q: q.trim() || undefined,
+      limit,
+    },
+  });
+
+  return response.data;
+}

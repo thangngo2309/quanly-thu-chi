@@ -11,6 +11,7 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { QuerySalesDto } from './dto/query-sales.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Sale } from './entities/sale.entity';
+import { CustomerSuggestionQueryDto } from './dto/customer-suggestion-query.dto';
 
 @Injectable()
 export class SalesService {
@@ -168,5 +169,79 @@ export class SalesService {
     }
 
     return PaymentStatus.PARTIAL;
+  }
+
+  async getCustomerSuggestions(
+    query: CustomerSuggestionQueryDto,
+  ): Promise<string[]> {
+    const keyword = query.q?.trim() ?? '';
+    const limit = query.limit ?? 20;
+  
+    const queryBuilder = this.saleRepository
+      .createQueryBuilder('sale')
+      .select(
+        'sale.customerName',
+        'customerName',
+      )
+      .addSelect(
+        'MAX(sale.saleDate)',
+        'lastSaleDate',
+      )
+      .where(
+        `TRIM(COALESCE(sale.customerName, '')) <> ''`,
+      );
+  
+    if (keyword) {
+      queryBuilder.andWhere(
+        'sale.customerName ILIKE :keyword',
+        {
+          keyword: `%${keyword}%`,
+        },
+      );
+    }
+  
+    const rows = await queryBuilder
+      .groupBy('sale.customerName')
+      .orderBy(
+        'MAX(sale.saleDate)',
+        'DESC',
+      )
+      .limit(limit)
+      .getRawMany<{
+        customerName: string;
+        lastSaleDate: string;
+      }>();
+  
+    const uniqueCustomers =
+      new Map<string, string>();
+  
+    for (const row of rows) {
+      const customerName =
+        row.customerName?.trim();
+  
+      if (!customerName) {
+        continue;
+      }
+  
+      const normalizedName =
+        customerName.toLocaleLowerCase(
+          'vi-VN',
+        );
+  
+      if (
+        !uniqueCustomers.has(
+          normalizedName,
+        )
+      ) {
+        uniqueCustomers.set(
+          normalizedName,
+          customerName,
+        );
+      }
+    }
+  
+    return Array.from(
+      uniqueCustomers.values(),
+    ).slice(0, limit);
   }
 }

@@ -30,6 +30,9 @@ const bootstrap = async (): Promise<void> => {
       .split(',')
       .map((item) => item.trim()),
     credentials: true,
+    exposedHeaders: [
+      'Content-Disposition',
+    ],  
   });
 
   app.useGlobalPipes(

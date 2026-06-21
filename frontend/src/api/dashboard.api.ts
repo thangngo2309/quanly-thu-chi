@@ -2,15 +2,10 @@ import { DashboardQueryParams, DashboardSummary } from "@/features/dashboard/typ
 import { api } from "./http";
 
 export async function getDashboardSummary(
-  params: DashboardQueryParams,
+  params: DashboardQueryParams
 ): Promise<DashboardSummary> {
-  const response =
-    await api.get<DashboardSummary>(
-      '/dashboard/summary',
-      {
-        params,
-      },
-    );
-
+  const response = await api.get<DashboardSummary>("/dashboard/summary", {
+    params,
+  });
   return response.data;
 }

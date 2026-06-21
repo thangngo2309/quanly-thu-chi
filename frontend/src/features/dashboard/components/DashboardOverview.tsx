@@ -30,6 +30,7 @@ import type {
 import { getDashboardSummary } from "@/api/dashboard.api";
 import { ExportExcelDialog } from "@/features/reports/components/ExportExcelDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { DashboardDateFilter } from "./DashboardDateFilter";
 
 const emptySummary: DashboardSummary = {
   fromDate: null,
@@ -209,8 +210,13 @@ export function DashboardOverview() {
 
   const { setValue, reset, setError, clearErrors, getValues } = methods;
 
+  const defaultFilters: DashboardFilterValues = {
+    fromDate: "",
+    toDate: "",
+  };
+
   const [filters, setFilters] = useState<DashboardFilterValues>({
-    ...defaultFilterValues,
+    ...defaultFilters,
   });
 
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
@@ -237,6 +243,24 @@ export function DashboardOverview() {
     } finally {
       setLoading(false);
     }
+  }, [filters]);
+
+  const selectedDateLabel = useMemo(() => {
+    if (!filters.fromDate && !filters.toDate) {
+      return "Toàn bộ thời gian";
+    }
+
+    if (filters.fromDate && filters.toDate) {
+      return `${formatDateVi(filters.fromDate)} - ${formatDateVi(
+        filters.toDate
+      )}`;
+    }
+
+    if (filters.fromDate) {
+      return `Từ ${formatDateVi(filters.fromDate)}`;
+    }
+
+    return `Đến ${formatDateVi(filters.toDate)}`;
   }, [filters]);
 
   useEffect(() => {
@@ -380,13 +404,29 @@ export function DashboardOverview() {
             title="Tổng quát"
             description="Theo dõi doanh thu, công nợ, chi phí và lợi nhuận."
           />
-
+          <DashboardDateFilter
+            loading={loading}
+            value={filters}
+            onApply={(values) => {
+              setFilters(values);
+            }}
+          />{" "}
+          <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
+            {" "}
+            Dữ liệu đang hiển thị:{" "}
+            <Box
+              component="span"
+              sx={{ fontWeight: 800, color: "text.primary" }}
+            >
+              {" "}
+              {selectedDateLabel}{" "}
+            </Box>{" "}
+          </Typography>
           {errorMessage && (
             <Alert severity="error" onClose={() => setErrorMessage(null)}>
               {errorMessage}
             </Alert>
           )}
-
           {loading ? (
             <DashboardSkeleton />
           ) : (

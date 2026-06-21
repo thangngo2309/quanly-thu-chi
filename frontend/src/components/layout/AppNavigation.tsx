@@ -6,6 +6,7 @@ import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import {
   AppBar,
   Box,
@@ -58,6 +59,12 @@ const navigationItems: NavigationItem[] = [
     mobileLabel: 'Quản lý khoản chi',
     href: '/expenses',
     icon: <AccountBalanceWalletOutlinedIcon />,
+  },
+  {
+    label: 'Quản lý công nợ',
+    mobileLabel: 'Quản lý công nợ',
+    href: '/debts',
+    icon: <RequestQuoteOutlinedIcon />,
   },
   {
     label: 'Tổng quát',

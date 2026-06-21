@@ -17,6 +17,7 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { QuerySalesDto } from './dto/query-sales.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { SalesService } from './sales.service';
+import { CustomerSuggestionQueryDto } from './dto/customer-suggestion-query.dto';
 
 @ApiTags('Sales')
 @Controller('sales')
@@ -37,6 +38,14 @@ export class SalesController {
   })
   findAll(@Query() query: QuerySalesDto) {
     return this.salesService.findAll(query);
+  }
+
+  @Get('customer-suggestions')
+  getCustomerSuggestions(
+    @Query()
+    query: CustomerSuggestionQueryDto,
+  ): Promise<string[]> {
+    return this.salesService.getCustomerSuggestions(query);
   }
 
   @Get(':id')

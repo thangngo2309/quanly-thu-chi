@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import {
   Alert,
   Box,
@@ -12,58 +12,46 @@ import {
   Paper,
   Stack,
   Typography,
-} from '@mui/material';
-import axios from 'axios';
-import dayjs from 'dayjs';
-import { useEffect, useMemo, useState } from 'react';
-import {
-  type SubmitHandler,
-  useForm,
-  useWatch,
-} from 'react-hook-form';
+} from "@mui/material";
+import axios from "axios";
+import dayjs from "dayjs";
+import { useEffect, useMemo, useState } from "react";
+import { type SubmitHandler, useForm, useWatch } from "react-hook-form";
 
-import {
-  HDatePicker,
-  HForm,
-  HInput,
-  HRadio,
-} from '@/components/form';
-import { formatVnd } from '@/utils/currency';
+import { HDatePicker, HForm, HInput, HRadio } from "@/components/form";
+import { formatVnd } from "@/utils/currency";
 
-import type {
-  Sale,
-  SaleFormValues,
-} from '../types/sale.types';
-import { createSale } from '@/api/sales.api';
+import type { Sale, SaleFormValues } from "../types/sale.types";
+import { createSale } from "@/api/sales.api";
+import { HCustomerAutocomplete } from "@/components/form/HCustomerAutocomplete";
 
 const defaultValues: SaleFormValues = {
-  customerName: '',
-  content: '',
-  totalAmount: '',
-  paymentStatus: 'UNPAID',
-  saleDate: '',
-  note: '',
+  customerName: "",
+  content: "",
+  totalAmount: "",
+  paymentStatus: "UNPAID",
+  saleDate: "",
+  note: "",
 };
 
 function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const responseMessage =
-      error.response?.data?.message;
+    const responseMessage = error.response?.data?.message;
 
     if (Array.isArray(responseMessage)) {
-      return responseMessage.join(', ');
+      return responseMessage.join(", ");
     }
 
-    if (typeof responseMessage === 'string') {
+    if (typeof responseMessage === "string") {
       return responseMessage;
     }
 
-    if (error.code === 'ECONNABORTED') {
-      return 'Máy chủ phản hồi quá chậm. Vui lòng thử lại.';
+    if (error.code === "ECONNABORTED") {
+      return "Máy chủ phản hồi quá chậm. Vui lòng thử lại.";
     }
 
     if (!error.response) {
-      return 'Không thể kết nối đến máy chủ.';
+      return "Không thể kết nối đến máy chủ.";
     }
   }
 
@@ -71,84 +59,62 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return 'Đã xảy ra lỗi khi lưu khoản thu.';
+  return "Đã xảy ra lỗi khi lưu khoản thu.";
 }
 
 export function SaleCreateForm() {
   const methods = useForm<SaleFormValues>({
     defaultValues,
-    mode: 'onBlur',
+    mode: "onBlur",
   });
 
   const {
     control,
     reset,
     setValue,
-    formState: {
-      isSubmitting,
-    },
+    formState: { isSubmitting },
   } = methods;
 
   useEffect(() => {
-    setValue(
-      'saleDate',
-      dayjs().format('YYYY-MM-DD'),
-    );
+    setValue("saleDate", dayjs().format("YYYY-MM-DD"));
   }, [setValue]);
 
-  const [successSale, setSuccessSale] =
-    useState<Sale | null>(null);
+  const [successSale, setSuccessSale] = useState<Sale | null>(null);
 
-  const [errorMessage, setErrorMessage] =
-    useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const totalAmountValue = useWatch({
     control,
-    name: 'totalAmount',
+    name: "totalAmount",
   });
 
   const paymentStatus = useWatch({
     control,
-    name: 'paymentStatus',
+    name: "paymentStatus",
   });
 
   const totalAmount = useMemo(() => {
     const value = Number(totalAmountValue);
 
-    return Number.isFinite(value) && value > 0
-      ? value
-      : 0;
+    return Number.isFinite(value) && value > 0 ? value : 0;
   }, [totalAmountValue]);
 
-  const paidAmount =
-    paymentStatus === 'PAID'
-      ? totalAmount
-      : 0;
+  const paidAmount = paymentStatus === "PAID" ? totalAmount : 0;
 
-  const remainingAmount =
-    totalAmount - paidAmount;
+  const remainingAmount = totalAmount - paidAmount;
 
-  const onSubmit: SubmitHandler<
-    SaleFormValues
-  > = async (values) => {
+  const onSubmit: SubmitHandler<SaleFormValues> = async (values) => {
     setErrorMessage(null);
     setSuccessSale(null);
 
     try {
-      const normalizedTotalAmount = Number(
-        values.totalAmount,
-      );
+      const normalizedTotalAmount = Number(values.totalAmount);
 
       const sale = await createSale({
-        customerName:
-          values.customerName.trim(),
+        customerName: values.customerName.trim(),
         content: values.content.trim(),
-        totalAmount:
-          normalizedTotalAmount,
-        paidAmount:
-          values.paymentStatus === 'PAID'
-            ? normalizedTotalAmount
-            : 0,
+        totalAmount: normalizedTotalAmount,
+        paidAmount: values.paymentStatus === "PAID" ? normalizedTotalAmount : 0,
         saleDate: values.saleDate,
         note: values.note.trim() || undefined,
       });
@@ -157,13 +123,10 @@ export function SaleCreateForm() {
 
       reset({
         ...defaultValues,
-        saleDate:
-          dayjs().format('YYYY-MM-DD'),
+        saleDate: dayjs().format("YYYY-MM-DD"),
       });
     } catch (error) {
-      setErrorMessage(
-        getErrorMessage(error),
-      );
+      setErrorMessage(getErrorMessage(error));
     }
   };
 
@@ -171,10 +134,10 @@ export function SaleCreateForm() {
     <Card
       elevation={0}
       sx={{
-        border: '1px solid',
-        borderColor: 'divider',
+        border: "1px solid",
+        borderColor: "divider",
         borderRadius: 3,
-        overflow: 'hidden',
+        overflow: "hidden",
       }}
     >
       <CardContent
@@ -186,19 +149,12 @@ export function SaleCreateForm() {
         }}
       >
         <Stack spacing={0.75}>
-          <Typography
-            variant="h5"
-            sx={{fontWeight: 800}}
-          >
+          <Typography variant="h5" sx={{ fontWeight: 800 }}>
             Nhập khoản thu
           </Typography>
 
-          <Typography
-            variant="body2"
-            color="text.secondary"
-          >
-            Ghi nhận doanh thu bán hàng và
-            trạng thái thanh toán của khách.
+          <Typography variant="body2" color="text.secondary">
+            Ghi nhận doanh thu bán hàng và trạng thái thanh toán của khách.
           </Typography>
         </Stack>
       </CardContent>
@@ -213,69 +169,41 @@ export function SaleCreateForm() {
           },
         }}
       >
-        <HForm
-          methods={methods}
-          onSubmit={onSubmit}
-        >
+        <HForm methods={methods} onSubmit={onSubmit}>
           <Stack spacing={3}>
             {successSale && (
-              <Alert
-                severity="success"
-                onClose={() =>
-                  setSuccessSale(null)
-                }
-              >
-                Đã lưu khoản thu của{' '}
-                <strong>
-                  {successSale.customerName}
-                </strong>
-                , số tiền{' '}
-                <strong>
-                  {formatVnd(
-                    successSale.totalAmount,
-                  )}
-                </strong>
-                .
+              <Alert severity="success" onClose={() => setSuccessSale(null)}>
+                Đã lưu khoản thu của <strong>{successSale.customerName}</strong>
+                , số tiền <strong>{formatVnd(successSale.totalAmount)}</strong>.
               </Alert>
             )}
 
             {errorMessage && (
-              <Alert
-                severity="error"
-                onClose={() =>
-                  setErrorMessage(null)
-                }
-              >
+              <Alert severity="error" onClose={() => setErrorMessage(null)}>
                 {errorMessage}
               </Alert>
             )}
 
             <Box
               sx={{
-                display: 'grid',
+                display: "grid",
                 gridTemplateColumns: {
-                  xs: '1fr',
-                  md: 'repeat(2, minmax(0, 1fr))',
+                  xs: "1fr",
+                  md: "repeat(2, minmax(0, 1fr))",
                 },
                 gap: 2,
               }}
             >
-              <HInput<SaleFormValues>
+              <HCustomerAutocomplete<SaleFormValues>
                 name="customerName"
+                freeSolo
                 label="Tên khách hàng"
-                placeholder="Nhập tên khách hàng"
-                autoComplete="off"
+                placeholder="Nhập tên mới hoặc chọn khách hàng đã có"
                 rules={{
-                  required:
-                    'Vui lòng nhập tên khách hàng',
-                  maxLength: {
-                    value: 150,
-                    message:
-                      'Tên khách hàng không quá 150 ký tự',
-                  },
+                  required: "Vui lòng nhập tên khách hàng",
+
                   validate: (value) =>
-                    value.trim().length > 0 ||
-                    'Vui lòng nhập tên khách hàng',
+                    value.trim().length > 0 || "Vui lòng nhập tên khách hàng",
                 }}
               />
 
@@ -283,8 +211,7 @@ export function SaleCreateForm() {
                 name="saleDate"
                 label="Ngày phát sinh"
                 rules={{
-                  required:
-                    'Vui lòng chọn ngày phát sinh',
+                  required: "Vui lòng chọn ngày phát sinh",
                 }}
               />
             </Box>
@@ -296,23 +223,21 @@ export function SaleCreateForm() {
               multiline
               minRows={3}
               rules={{
-                required:
-                  'Vui lòng nhập nội dung mua',
+                required: "Vui lòng nhập nội dung mua",
                 validate: (value) =>
-                  value.trim().length > 0 ||
-                  'Vui lòng nhập nội dung mua',
+                  value.trim().length > 0 || "Vui lòng nhập nội dung mua",
               }}
             />
 
             <Box
               sx={{
-                display: 'grid',
+                display: "grid",
                 gridTemplateColumns: {
-                  xs: '1fr',
-                  md: 'repeat(2, minmax(0, 1fr))',
+                  xs: "1fr",
+                  md: "repeat(2, minmax(0, 1fr))",
                 },
                 gap: 2,
-                alignItems: 'start',
+                alignItems: "start",
               }}
             >
               <HInput<SaleFormValues>
@@ -324,24 +249,17 @@ export function SaleCreateForm() {
                   htmlInput: {
                     min: 1,
                     step: 1000,
-                    inputMode: 'numeric',
+                    inputMode: "numeric",
                   },
                 }}
                 rules={{
-                  required:
-                    'Vui lòng nhập tổng số tiền',
+                  required: "Vui lòng nhập tổng số tiền",
                   validate: {
                     validNumber: (value) =>
-                      Number.isFinite(
-                        Number(value),
-                      ) ||
-                      'Số tiền không hợp lệ',
+                      Number.isFinite(Number(value)) || "Số tiền không hợp lệ",
 
-                    greaterThanZero: (
-                      value,
-                    ) =>
-                      Number(value) > 0 ||
-                      'Số tiền phải lớn hơn 0',
+                    greaterThanZero: (value) =>
+                      Number(value) > 0 || "Số tiền phải lớn hơn 0",
                   },
                 }}
               />
@@ -351,7 +269,7 @@ export function SaleCreateForm() {
                 sx={{
                   p: 2,
                   borderRadius: 2,
-                  bgcolor: 'grey.50',
+                  bgcolor: "grey.50",
                 }}
               >
                 <HRadio<SaleFormValues>
@@ -360,18 +278,16 @@ export function SaleCreateForm() {
                   row
                   options={[
                     {
-                      label:
-                        'Chưa thanh toán',
-                      value: 'UNPAID',
+                      label: "Chưa thanh toán",
+                      value: "UNPAID",
                     },
                     {
-                      label: 'Đã thanh toán',
-                      value: 'PAID',
+                      label: "Đã thanh toán",
+                      value: "PAID",
                     },
                   ]}
                   rules={{
-                    required:
-                      'Vui lòng chọn trạng thái thanh toán',
+                    required: "Vui lòng chọn trạng thái thanh toán",
                   }}
                 />
               </Paper>
@@ -386,8 +302,7 @@ export function SaleCreateForm() {
               rules={{
                 maxLength: {
                   value: 1000,
-                  message:
-                    'Ghi chú không quá 1.000 ký tự',
+                  message: "Ghi chú không quá 1.000 ký tự",
                 },
               }}
             />
@@ -397,47 +312,35 @@ export function SaleCreateForm() {
               sx={{
                 p: 2,
                 borderRadius: 2,
-                bgcolor: 'primary.50',
+                bgcolor: "primary.50",
               }}
             >
-              <Typography
-                variant="subtitle2"
-                
-                sx={{ mb: 1.5, fontWeight: 800 }}
-              >
+              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 800 }}>
                 Thông tin ghi nhận
               </Typography>
 
               <Box
                 sx={{
-                  display: 'grid',
+                  display: "grid",
                   gridTemplateColumns: {
-                    xs: '1fr',
-                    sm: 'repeat(3, minmax(0, 1fr))',
+                    xs: "1fr",
+                    sm: "repeat(3, minmax(0, 1fr))",
                   },
                   gap: 2,
                 }}
               >
                 <Box>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                  >
+                  <Typography variant="caption" color="text.secondary">
                     Tổng doanh thu
                   </Typography>
 
-                  <Typography
-                    sx={{ mt: 0.25, fontWeight: 800 }}
-                  >
+                  <Typography sx={{ mt: 0.25, fontWeight: 800 }}>
                     {formatVnd(totalAmount)}
                   </Typography>
                 </Box>
 
                 <Box>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                  >
+                  <Typography variant="caption" color="text.secondary">
                     Đã thu
                   </Typography>
 
@@ -450,24 +353,15 @@ export function SaleCreateForm() {
                 </Box>
 
                 <Box>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                  >
+                  <Typography variant="caption" color="text.secondary">
                     Còn nợ
                   </Typography>
 
                   <Typography
-                    color={
-                      remainingAmount > 0
-                        ? 'error.main'
-                        : 'text.primary'
-                    }
+                    color={remainingAmount > 0 ? "error.main" : "text.primary"}
                     sx={{ mt: 0.25, fontWeight: 800 }}
                   >
-                    {formatVnd(
-                      remainingAmount,
-                    )}
+                    {formatVnd(remainingAmount)}
                   </Typography>
                 </Box>
               </Box>
@@ -475,11 +369,11 @@ export function SaleCreateForm() {
 
             <Stack
               direction={{
-                xs: 'column-reverse',
-                sm: 'row',
+                xs: "column-reverse",
+                sm: "row",
               }}
               spacing={1.5}
-              sx={{justifyContent: 'flex-end'}}
+              sx={{ justifyContent: "flex-end" }}
             >
               <Button
                 type="button"
@@ -488,10 +382,7 @@ export function SaleCreateForm() {
                 onClick={() => {
                   reset({
                     ...defaultValues,
-                    saleDate:
-                      dayjs().format(
-                        'YYYY-MM-DD',
-                      ),
+                    saleDate: dayjs().format("YYYY-MM-DD"),
                   });
 
                   setErrorMessage(null);
@@ -511,10 +402,7 @@ export function SaleCreateForm() {
                 disabled={isSubmitting}
                 startIcon={
                   isSubmitting ? (
-                    <CircularProgress
-                      size={18}
-                      color="inherit"
-                    />
+                    <CircularProgress size={18} color="inherit" />
                   ) : (
                     <SaveOutlinedIcon />
                   )
@@ -524,9 +412,7 @@ export function SaleCreateForm() {
                   minWidth: 160,
                 }}
               >
-                {isSubmitting
-                  ? 'Đang lưu...'
-                  : 'Lưu khoản thu'}
+                {isSubmitting ? "Đang lưu..." : "Lưu khoản thu"}
               </Button>
             </Stack>
           </Stack>

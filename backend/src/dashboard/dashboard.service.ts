@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 
 import { Expense } from '../expenses/entities/expense.entity';
 import { Sale } from '../sales/entities/sale.entity';
-import { DashboardQueryDto } from './dto/dashboard-query.dto';
+import { DashboardSummaryQueryDto } from './dto/dashboard-summary-query.dto';
 
 @Injectable()
 export class DashboardService {
@@ -16,18 +16,10 @@ export class DashboardService {
     private readonly expenseRepository: Repository<Expense>,
   ) {}
 
-  async getSummary(query: DashboardQueryDto) {
-    const salesQuery = this.saleRepository
-      .createQueryBuilder('sale')
-      .select('COALESCE(SUM(sale.totalAmount), 0)', 'totalRevenue')
-      .addSelect('COALESCE(SUM(sale.paidAmount), 0)', 'totalCollected')
-      .addSelect('COALESCE(SUM(sale.remainingAmount), 0)', 'totalDebt')
-      .addSelect('COUNT(sale.id)', 'totalSales');
+  async getSummary(query: DashboardSummaryQueryDto) {
+    const salesQuery = this.saleRepository.createQueryBuilder('sale');
 
-    const expensesQuery = this.expenseRepository
-      .createQueryBuilder('expense')
-      .select('COALESCE(SUM(expense.amount), 0)', 'totalExpenses')
-      .addSelect('COUNT(expense.id)', 'totalExpenseItems');
+    const expensesQuery = this.expenseRepository.createQueryBuilder('expense');
 
     if (query.fromDate) {
       salesQuery.andWhere('sale.saleDate >= :fromDate', {
@@ -49,27 +41,30 @@ export class DashboardService {
       });
     }
 
-    const [salesResult, expensesResult] = await Promise.all([
-      salesQuery.getRawOne<{
-        totalRevenue: string;
-        totalCollected: string;
-        totalDebt: string;
-        totalSales: string;
-      }>(),
-
-      expensesQuery.getRawOne<{
-        totalExpenses: string;
-        totalExpenseItems: string;
-      }>(),
+    const [sales, expenses] = await Promise.all([
+      salesQuery.getMany(),
+      expensesQuery.getMany(),
     ]);
 
-    const totalRevenue = Number(salesResult?.totalRevenue ?? 0);
+    const totalRevenue = sales.reduce(
+      (total, sale) => total + Number(sale.totalAmount || 0),
+      0,
+    );
 
-    const totalCollected = Number(salesResult?.totalCollected ?? 0);
+    const totalCollected = sales.reduce(
+      (total, sale) => total + Number(sale.paidAmount || 0),
+      0,
+    );
 
-    const totalDebt = Number(salesResult?.totalDebt ?? 0);
+    const totalDebt = sales.reduce(
+      (total, sale) => total + Number(sale.remainingAmount || 0),
+      0,
+    );
 
-    const totalExpenses = Number(expensesResult?.totalExpenses ?? 0);
+    const totalExpenses = expenses.reduce(
+      (total, expense) => total + Number(expense.amount || 0),
+      0,
+    );
 
     return {
       fromDate: query.fromDate ?? null,
@@ -84,9 +79,9 @@ export class DashboardService {
 
       cashBalance: totalCollected - totalExpenses,
 
-      totalSales: Number(salesResult?.totalSales ?? 0),
+      totalSales: sales.length,
 
-      totalExpenseItems: Number(expensesResult?.totalExpenseItems ?? 0),
+      totalExpenseItems: expenses.length,
     };
   }
 }
