@@ -154,24 +154,31 @@ jobs:
           done
 
           echo "==> Kiểm tra Backend"
-          curl --fail --silent --show-error \
-            --max-time 15 \
-            http://127.0.0.1:6200/api \
-            >/dev/null || {
-              echo "Backend không phản hồi tại cổng 6200."
-              docker logs --tail=150 qltc-backend-prod || true
-              exit 1
-            }
+
+          curl --fail \
+          --silent \
+          --show-error \
+          --max-time 15 \
+          "http://127.0.0.1:6200/api/sales?page=1&limit=1" \
+          >/dev/null || {
+            echo "Backend không phản hồi."
+            docker logs --tail=150 qltc-backend-prod || true
+            exit 1
+          }
 
           echo "==> Kiểm tra Frontend"
-          curl --fail --silent --show-error \
-            --max-time 15 \
-            http://127.0.0.1:6201/thuchi \
-            >/dev/null || {
-              echo "Frontend không phản hồi tại cổng 6201."
-              docker logs --tail=150 qltc-frontend-prod || true
-              exit 1
-            }
+
+          curl --fail \
+          --location \
+          --silent \
+          --show-error \
+          --max-time 15 \
+          "http://127.0.0.1:6201/thuchi" \
+          >/dev/null || {
+            echo "Frontend không phản hồi."
+            docker logs --tail=150 qltc-frontend-prod || true
+            exit 1
+          }
 
           echo "==> Trạng thái container"
           docker compose \
@@ -186,4 +193,3 @@ jobs:
           echo "DEPLOY THU CHI THÀNH CÔNG"
           echo "========================================"
           EOF
-
