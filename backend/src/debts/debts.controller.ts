@@ -4,8 +4,11 @@ import type { Response } from 'express';
 import { DebtsPdfService } from './debts-pdf.service';
 import { DebtsService } from './debts.service';
 import { DebtQueryDto } from './dto/debt-query.dto';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { UserRole } from 'src/common/enums/user-role.enum';
 
 @Controller('debts')
+@Roles(UserRole.SYSTEM_ADMIN)
 export class DebtsController {
   constructor(
     private readonly debtsService: DebtsService,

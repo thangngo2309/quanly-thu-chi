@@ -14,9 +14,12 @@ import {
   
   import { ExportReportQueryDto } from './dto/export-report-query.dto';
   import { ReportsService } from './reports.service';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { UserRole } from 'src/common/enums/user-role.enum';
   
   @ApiTags('Reports')
   @Controller('reports')
+  @Roles(UserRole.SYSTEM_ADMIN)
   export class ReportsController {
     constructor(
       private readonly reportsService: ReportsService,

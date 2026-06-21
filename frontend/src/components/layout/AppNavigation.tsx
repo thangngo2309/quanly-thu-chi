@@ -1,12 +1,14 @@
-'use client';
+"use client";
 
-import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
-import AddCircleOutlineOutlinedIcon from '@mui/icons-material/AddCircleOutlineOutlined';
-import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
-import MenuIcon from '@mui/icons-material/Menu';
-import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined';
-import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
+import { UserRole } from "@/features/auth/types/auth.types";
+import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
+import AddCircleOutlineOutlinedIcon from "@mui/icons-material/AddCircleOutlineOutlined";
+import DashboardOutlinedIcon from "@mui/icons-material/DashboardOutlined";
+import MenuIcon from "@mui/icons-material/Menu";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import RequestQuoteOutlinedIcon from "@mui/icons-material/RequestQuoteOutlined";
+import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import {
   AppBar,
   Box,
@@ -20,70 +22,91 @@ import {
   ListItemText,
   Toolbar,
   Typography,
-} from '@mui/material';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import {
-  type ReactNode,
-  useState,
-} from 'react';
+} from "@mui/material";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { type ReactNode, useState, useMemo } from "react";
+import { useAuth } from "@/features/auth/context/AuthProvider";
 
 type NavigationItem = {
   label: string;
   mobileLabel: string;
   href: string;
   icon: ReactNode;
+  roles: UserRole[];
 };
 
 const navigationItems: NavigationItem[] = [
   {
-    label: 'Tạo khoản thu',
-    mobileLabel: 'Tạo khoản thu',
-    href: '/',
+    label: "Tạo khoản thu",
+    mobileLabel: "Tạo khoản thu",
+    href: "/",
     icon: <AddCircleOutlineOutlinedIcon />,
+    roles: [UserRole.SYSTEM_ADMIN, UserRole.ADMIN],
   },
   {
-    label: 'Tạo khoản chi',
-    mobileLabel: 'Tạo khoản chi',
-    href: '/expenses/create',
+    label: "Tạo khoản chi",
+    mobileLabel: "Tạo khoản chi",
+    href: "/expenses/create",
     icon: <PaymentsOutlinedIcon />,
+    roles: [UserRole.SYSTEM_ADMIN],
   },
   {
-    label: 'Quản lý khoản thu',
-    mobileLabel: 'Quản lý khoản thu',
-    href: '/sales',
+    label: "Quản lý khoản thu",
+    mobileLabel: "Quản lý khoản thu",
+    href: "/sales",
     icon: <ReceiptLongOutlinedIcon />,
+    roles: [UserRole.SYSTEM_ADMIN],
   },
   {
-    label: 'Quản lý khoản chi',
-    mobileLabel: 'Quản lý khoản chi',
-    href: '/expenses',
-    icon: <AccountBalanceWalletOutlinedIcon />,
-  },
-  {
-    label: 'Quản lý công nợ',
-    mobileLabel: 'Quản lý công nợ',
-    href: '/debts',
+    label: "Quản lý công nợ",
+    mobileLabel: "Quản lý công nợ",
+    href: "/debts",
     icon: <RequestQuoteOutlinedIcon />,
+    roles: [UserRole.SYSTEM_ADMIN],
   },
   {
-    label: 'Tổng quát',
-    mobileLabel: 'Tổng quát',
-    href: '/dashboard',
+    label: "Quản lý khoản chi",
+    mobileLabel: "Quản lý khoản chi",
+    href: "/expenses",
+    icon: <AccountBalanceWalletOutlinedIcon />,
+    roles: [UserRole.SYSTEM_ADMIN],
+  },
+  {
+    label: "Tổng quát",
+    mobileLabel: "Tổng quát",
+    href: "/dashboard",
     icon: <DashboardOutlinedIcon />,
+    roles: [UserRole.SYSTEM_ADMIN],
+  },
+  {
+    label: "Quản lý người dùng",
+    mobileLabel: "Quản lý người dùng",
+    href: "/users",
+    icon: <ManageAccountsOutlinedIcon />,
+    roles: [UserRole.SYSTEM_ADMIN],
   },
 ];
 
 export function AppNavigation() {
   const pathname = usePathname();
 
-  const [drawerOpen, setDrawerOpen] =
-    useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const isActive = (
-    href: string,
-  ): boolean => {
-    return pathname === href;
+  const { user, logout } = useAuth();
+
+  const visibleNavigationItems = useMemo(() => {
+    if (!user) {
+      return [];
+    }
+    return navigationItems.filter((item) => item.roles.includes(user.role));
+  }, [user]);
+
+  const isActive = (href: string): boolean => {
+    if (href === "/") {
+      return pathname === "/";
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
   };
 
   const closeDrawer = (): void => {
@@ -98,14 +121,13 @@ export function AppNavigation() {
         elevation={0}
         sx={{
           display: {
-            xs: 'none',
-            md: 'block',
+            xs: "none",
+            md: "block",
           },
-          backgroundColor:
-            'background.paper',
-          color: 'text.primary',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
+          backgroundColor: "background.paper",
+          color: "text.primary",
+          borderBottom: "1px solid",
+          borderColor: "divider",
         }}
       >
         <Toolbar
@@ -124,10 +146,10 @@ export function AppNavigation() {
             variant="h5"
             sx={{
               mr: 3,
-              color: 'primary.main',
+              color: "primary.main",
               fontWeight: 900,
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
+              textDecoration: "none",
+              whiteSpace: "nowrap",
             }}
           >
             Quản lý thu chi
@@ -135,56 +157,55 @@ export function AppNavigation() {
 
           <Box
             sx={{
-              display: 'flex',
-              alignItems: 'center',
+              display: "flex",
+              alignItems: "center",
               gap: 0.5,
               minWidth: 0,
-              overflowX: 'auto',
+              overflowX: "auto",
 
-              '&::-webkit-scrollbar': {
-                display: 'none',
+              "&::-webkit-scrollbar": {
+                display: "none",
               },
             }}
           >
-            {navigationItems.map(
-              (item) => {
-                const active = isActive(
-                  item.href,
-                );
+            {visibleNavigationItems.map((item) => {
+              const active = isActive(item.href);
 
-                return (
-                  <Button
-                    key={item.href}
-                    component={Link}
-                    href={item.href}
-                    color={
-                      active
-                        ? 'primary'
-                        : 'inherit'
-                    }
-                    sx={{
-                      minHeight: 42,
-                      px: 1.75,
-                      borderRadius: 2,
-                      whiteSpace: 'nowrap',
-                      fontWeight: active
-                        ? 800
-                        : 600,
-                      backgroundColor: active
-                        ? 'action.selected'
-                        : 'transparent',
+              return (
+                <Button
+                  key={item.href}
+                  component={Link}
+                  href={item.href}
+                  color={active ? "primary" : "inherit"}
+                  sx={{
+                    minHeight: 42,
+                    px: 1.75,
+                    borderRadius: 2,
+                    whiteSpace: "nowrap",
+                    fontWeight: active ? 800 : 600,
+                    backgroundColor: active ? "action.selected" : "transparent",
 
-                      '&:hover': {
-                        backgroundColor:
-                          'action.hover',
-                      },
-                    }}
-                  >
-                    {item.label}
-                  </Button>
-                );
-              },
-            )}
+                    "&:hover": {
+                      backgroundColor: "action.hover",
+                    },
+                  }}
+                >
+                  {item.label}
+                </Button>
+              );
+            })}
+            <Button
+              type="button"
+              color="error"
+              variant="outlined"
+              onClick={logout}
+              sx={{
+                ml: "auto",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Đăng xuất
+            </Button>
           </Box>
         </Toolbar>
       </AppBar>
@@ -195,14 +216,13 @@ export function AppNavigation() {
         elevation={0}
         sx={{
           display: {
-            xs: 'block',
-            md: 'none',
+            xs: "block",
+            md: "none",
           },
-          backgroundColor:
-            'background.paper',
-          color: 'text.primary',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
+          backgroundColor: "background.paper",
+          color: "text.primary",
+          borderBottom: "1px solid",
+          borderColor: "divider",
         }}
       >
         <Toolbar
@@ -216,10 +236,10 @@ export function AppNavigation() {
             href="/"
             sx={{
               flex: 1,
-              color: 'primary.main',
+              color: "primary.main",
               fontWeight: 900,
               fontSize: 20,
-              textDecoration: 'none',
+              textDecoration: "none",
             }}
           >
             Quản lý thu chi
@@ -229,9 +249,7 @@ export function AppNavigation() {
             type="button"
             edge="end"
             aria-label="Mở menu"
-            onClick={() =>
-              setDrawerOpen(true)
-            }
+            onClick={() => setDrawerOpen(true)}
             sx={{
               width: 44,
               height: 44,
@@ -247,8 +265,8 @@ export function AppNavigation() {
         open={drawerOpen}
         onClose={closeDrawer}
         sx={{
-          '& .MuiDrawer-paper': {
-            width: 'min(82vw, 320px)',
+          "& .MuiDrawer-paper": {
+            width: "min(82vw, 320px)",
             borderTopLeftRadius: 20,
             borderBottomLeftRadius: 20,
           },
@@ -265,7 +283,7 @@ export function AppNavigation() {
             sx={{
               fontSize: 21,
               fontWeight: 900,
-              color: 'primary.main',
+              color: "primary.main",
             }}
           >
             Quản lý thu chi
@@ -290,65 +308,66 @@ export function AppNavigation() {
             py: 1.5,
           }}
         >
-          {navigationItems.map(
-            (item) => {
-              const active = isActive(
-                item.href,
-              );
+          {visibleNavigationItems.map((item) => {
+            const active = isActive(item.href);
 
-              return (
-                <ListItemButton
-                  key={item.href}
-                  component={Link}
-                  href={item.href}
-                  selected={active}
-                  onClick={closeDrawer}
+            return (
+              <ListItemButton
+                key={item.href}
+                component={Link}
+                href={item.href}
+                selected={active}
+                onClick={closeDrawer}
+                sx={{
+                  minHeight: 52,
+                  mb: 0.5,
+                  borderRadius: 2.5,
+
+                  "&.Mui-selected": {
+                    color: "primary.main",
+                    backgroundColor: "action.selected",
+                  },
+
+                  "&.Mui-selected:hover": {
+                    backgroundColor: "action.selected",
+                  },
+                }}
+              >
+                <ListItemIcon
                   sx={{
-                    minHeight: 52,
-                    mb: 0.5,
-                    borderRadius: 2.5,
-
-                    '&.Mui-selected': {
-                      color: 'primary.main',
-                      backgroundColor:
-                        'action.selected',
-                    },
-
-                    '&.Mui-selected:hover': {
-                      backgroundColor:
-                        'action.selected',
-                    },
+                    minWidth: 42,
+                    color: active ? "primary.main" : "text.secondary",
                   }}
                 >
-                  <ListItemIcon
-                    sx={{
-                      minWidth: 42,
-                      color: active
-                        ? 'primary.main'
-                        : 'text.secondary',
-                    }}
-                  >
-                    {item.icon}
-                  </ListItemIcon>
+                  {item.icon}
+                </ListItemIcon>
 
-                  <ListItemText
-                    primary={
-                      item.mobileLabel
-                    }
-                    slotProps={{
-                      primary: {
-                        sx: {
-                          fontWeight: active
-                            ? 800
-                            : 600,
-                        },
+                <ListItemText
+                  primary={item.mobileLabel}
+                  slotProps={{
+                    primary: {
+                      sx: {
+                        fontWeight: active ? 800 : 600,
                       },
-                    }}
-                  />
-                </ListItemButton>
-              );
-            },
-          )}
+                    },
+                  }}
+                />
+              </ListItemButton>
+            );
+          })}
+          <Button
+            type="button"
+            color="error"
+            variant="outlined"
+            fullWidth
+            onClick={logout}
+            sx={{
+              mt: 2,
+              minHeight: 46,
+            }}
+          >
+            Đăng xuất
+          </Button>
         </List>
       </Drawer>
     </>

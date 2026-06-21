@@ -17,9 +17,12 @@ import { CreateExpenseDto } from './dto/create-expense.dto';
 import { QueryExpensesDto } from './dto/query-expenses.dto';
 import { UpdateExpenseDto } from './dto/update-expense.dto';
 import { ExpensesService } from './expenses.service';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { UserRole } from 'src/common/enums/user-role.enum';
 
 @ApiTags('Expenses')
 @Controller('expenses')
+@Roles(UserRole.SYSTEM_ADMIN)
 export class ExpensesController {
   constructor(private readonly expensesService: ExpensesService) {}
 

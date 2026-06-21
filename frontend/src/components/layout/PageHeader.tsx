@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   Box,
@@ -6,10 +6,12 @@ import {
   Stack,
   Typography,
   type ButtonProps,
-} from '@mui/material';
-import Link from 'next/link';
+} from "@mui/material";
+import Link from "next/link";
 
-import { ExportExcelDialog } from '@/features/reports/components/ExportExcelDialog';
+import { ExportExcelDialog } from "@/features/reports/components/ExportExcelDialog";
+import { useAuth } from "@/features/auth/context/AuthProvider";
+import { UserRole } from "@/features/auth/types/auth.types";
 
 type PageHeaderProps = {
   title: string;
@@ -17,7 +19,7 @@ type PageHeaderProps = {
 
   actionHref?: string;
   actionLabel?: string;
-  actionColor?: ButtonProps['color'];
+  actionColor?: ButtonProps["color"];
 };
 
 export function PageHeader({
@@ -25,21 +27,25 @@ export function PageHeader({
   description,
   actionHref,
   actionLabel,
-  actionColor = 'primary',
+  actionColor = "primary",
 }: PageHeaderProps) {
+  const { user } = useAuth();
+
+  const canUseAdvancedActions = user?.role === UserRole.SYSTEM_ADMIN;
+
   return (
     <Stack
       spacing={2}
       sx={{
         flexDirection: {
-          xs: 'column',
-          sm: 'row',
+          xs: "column",
+          sm: "row",
         },
         alignItems: {
-          xs: 'stretch',
-          sm: 'flex-start',
+          xs: "stretch",
+          sm: "flex-start",
         },
-        justifyContent: 'space-between',
+        justifyContent: "space-between",
       }}
     >
       <Box>
@@ -71,44 +77,40 @@ export function PageHeader({
         )}
       </Box>
 
-      <Stack
-        direction={{
-          xs: 'column',
-          sm: 'row',
-        }}
-        spacing={1}
-        sx={{
-          width: {
-            xs: '100%',
-            sm: 'auto',
-          },
-          flexShrink: 0,
-        }}
-      >
-        <ExportExcelDialog fullWidth />
+      {canUseAdvancedActions && (
+        <Stack
+          direction={{
+            xs: "column",
+            sm: "row",
+          }}
+          spacing={1}
+          sx={{
+            width: {
+              xs: "100%",
+              sm: "auto",
+            },
+            flexShrink: 0,
+          }}
+        >
+          <ExportExcelDialog fullWidth />
 
-        {actionHref && actionLabel && (
-          <Link
-            href={actionHref}
-            style={{
-              textDecoration: 'none',
-              width: '100%',
-            }}
-          >
+          {actionHref && actionLabel && (
             <Button
+              component={Link}
+              href={actionHref}
               variant="contained"
               color={actionColor}
               fullWidth
               sx={{
                 minHeight: 44,
-                whiteSpace: 'nowrap',
+                whiteSpace: "nowrap",
               }}
             >
               {actionLabel}
             </Button>
-          </Link>
-        )}
-      </Stack>
+          )}
+        </Stack>
+      )}
     </Stack>
   );
 }

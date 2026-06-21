@@ -18,13 +18,17 @@ import { QuerySalesDto } from './dto/query-sales.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { SalesService } from './sales.service';
 import { CustomerSuggestionQueryDto } from './dto/customer-suggestion-query.dto';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { UserRole } from 'src/common/enums/user-role.enum';
 
 @ApiTags('Sales')
 @Controller('sales')
+@Roles(UserRole.SYSTEM_ADMIN)
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
   @Post()
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Tạo khoản doanh thu',
   })
@@ -41,6 +45,7 @@ export class SalesController {
   }
 
   @Get('customer-suggestions')
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.ADMIN)
   getCustomerSuggestions(
     @Query()
     query: CustomerSuggestionQueryDto,

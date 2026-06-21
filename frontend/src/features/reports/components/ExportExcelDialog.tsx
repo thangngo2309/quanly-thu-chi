@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   Alert,
@@ -11,62 +11,45 @@ import {
   Stack,
   Typography,
   type ButtonProps,
-} from '@mui/material';
-import dayjs from 'dayjs';
-import {
-  useEffect,
-  useState,
-} from 'react';
-import {
-  type SubmitHandler,
-  useForm,
-} from 'react-hook-form';
+} from "@mui/material";
+import dayjs from "dayjs";
+import { useEffect, useState } from "react";
+import { type SubmitHandler, useForm } from "react-hook-form";
 
-import {
-  HDatePicker,
-  HForm,
-} from '@/components/form';
-import { getApiErrorMessage } from '@/utils/api-error';
+import { HDatePicker, HForm } from "@/components/form";
+import { getApiErrorMessage } from "@/utils/api-error";
 
-import type { ExportReportFormValues } from '../types/report.types';
-import { downloadReportExcel } from '@/api/reports.api';
+import type { ExportReportFormValues } from "../types/report.types";
+import { downloadReportExcel } from "@/api/reports.api";
+import { useToast } from "@/components/toast/ToastProvider";
 
 type ExportExcelDialogProps = {
-  buttonColor?: ButtonProps['color'];
-  buttonVariant?: ButtonProps['variant'];
+  buttonColor?: ButtonProps["color"];
+  buttonVariant?: ButtonProps["variant"];
   fullWidth?: boolean;
 };
 
-const defaultValues: ExportReportFormValues =
-  {
-    fromDate: '',
-    toDate: '',
-  };
+const defaultValues: ExportReportFormValues = {
+  fromDate: "",
+  toDate: "",
+};
 
 export function ExportExcelDialog({
-  buttonColor = 'success',
-  buttonVariant = 'outlined',
+  buttonColor = "success",
+  buttonVariant = "outlined",
   fullWidth = false,
 }: ExportExcelDialogProps) {
-  const [open, setOpen] =
-    useState(false);
+  const toast = useToast();
 
-  const [loading, setLoading] =
-    useState(false);
+  const [open, setOpen] = useState(false);
 
-  const [errorMessage, setErrorMessage] =
-    useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const methods =
-    useForm<ExportReportFormValues>({
-      defaultValues,
-    });
+  const methods = useForm<ExportReportFormValues>({
+    defaultValues,
+  });
 
-  const {
-    reset,
-    setError,
-    clearErrors,
-  } = methods;
+  const { reset, setError, clearErrors } = methods;
 
   useEffect(() => {
     if (!open) {
@@ -74,16 +57,10 @@ export function ExportExcelDialog({
     }
 
     reset({
-      fromDate: dayjs()
-        .startOf('month')
-        .format('YYYY-MM-DD'),
+      fromDate: dayjs().startOf("month").format("YYYY-MM-DD"),
 
-      toDate: dayjs()
-        .endOf('month')
-        .format('YYYY-MM-DD'),
+      toDate: dayjs().endOf("month").format("YYYY-MM-DD"),
     });
-
-    setErrorMessage(null);
   }, [open, reset]);
 
   const handleClose = (): void => {
@@ -94,22 +71,15 @@ export function ExportExcelDialog({
     setOpen(false);
   };
 
-  const handleSubmit: SubmitHandler<
-    ExportReportFormValues
-  > = async (values) => {
+  const handleSubmit: SubmitHandler<ExportReportFormValues> = async (
+    values
+  ) => {
     clearErrors();
-    setErrorMessage(null);
 
-    if (
-      dayjs(values.fromDate).isAfter(
-        dayjs(values.toDate),
-        'day',
-      )
-    ) {
-      setError('toDate', {
-        type: 'validate',
-        message:
-          'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu',
+    if (dayjs(values.fromDate).isAfter(dayjs(values.toDate), "day")) {
+      setError("toDate", {
+        type: "validate",
+        message: "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu",
       });
 
       return;
@@ -125,12 +95,7 @@ export function ExportExcelDialog({
 
       setOpen(false);
     } catch (error) {
-      setErrorMessage(
-        getApiErrorMessage(
-          error,
-          'Không thể xuất file Excel.',
-        ),
-      );
+      toast.error(getApiErrorMessage(error, "Không thể xuất file Excel."));
     } finally {
       setLoading(false);
     }
@@ -146,7 +111,7 @@ export function ExportExcelDialog({
         onClick={() => setOpen(true)}
         sx={{
           minHeight: 44,
-          whiteSpace: 'nowrap',
+          whiteSpace: "nowrap",
         }}
       >
         Xuất Excel
@@ -161,8 +126,8 @@ export function ExportExcelDialog({
           paper: {
             sx: {
               width: {
-                xs: 'calc(100% - 24px)',
-                sm: '100%',
+                xs: "calc(100% - 24px)",
+                sm: "100%",
               },
               mx: {
                 xs: 1.5,
@@ -191,20 +156,9 @@ export function ExportExcelDialog({
               lineHeight: 1.6,
             }}
           >
-            File Excel bao gồm cả khoản
-            thu, khoản chi và phần tổng
-            kết lời lỗ trong cùng một
-            sheet.
+            File Excel bao gồm cả khoản thu, khoản chi và phần tổng kết lời lỗ
+            trong cùng một sheet.
           </Typography>
-
-          {errorMessage && (
-            <Alert
-              severity="error"
-              sx={{ mb: 2 }}
-            >
-              {errorMessage}
-            </Alert>
-          )}
 
           <HForm
             id="export-excel-form"
@@ -216,8 +170,7 @@ export function ExportExcelDialog({
                 name="fromDate"
                 label="Từ ngày"
                 rules={{
-                  required:
-                    'Vui lòng chọn ngày bắt đầu',
+                  required: "Vui lòng chọn ngày bắt đầu",
                 }}
               />
 
@@ -225,8 +178,7 @@ export function ExportExcelDialog({
                 name="toDate"
                 label="Đến ngày"
                 rules={{
-                  required:
-                    'Vui lòng chọn ngày kết thúc',
+                  required: "Vui lòng chọn ngày kết thúc",
                 }}
               />
             </Stack>
@@ -239,25 +191,24 @@ export function ExportExcelDialog({
             pb: 2.5,
             gap: 1,
             flexDirection: {
-              xs: 'column-reverse',
-              sm: 'row',
+              xs: "column-reverse",
+              sm: "row",
             },
 
-            '& .MuiButton-root': {
+            "& .MuiButton-root": {
               width: {
-                xs: '100%',
-                sm: 'auto',
+                xs: "100%",
+                sm: "auto",
               },
               minHeight: 44,
             },
 
-            '& .MuiButton-root + .MuiButton-root':
-              {
-                ml: {
-                  xs: 0,
-                  sm: 1,
-                },
+            "& .MuiButton-root + .MuiButton-root": {
+              ml: {
+                xs: 0,
+                sm: 1,
               },
+            },
           }}
         >
           <Button
@@ -280,16 +231,10 @@ export function ExportExcelDialog({
             }}
           >
             {loading && (
-              <CircularProgress
-                size={18}
-                color="inherit"
-                sx={{ mr: 1 }}
-              />
+              <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
             )}
 
-            {loading
-              ? 'Đang tạo file...'
-              : 'Tải Excel'}
+            {loading ? "Đang tạo file..." : "Tải Excel"}
           </Button>
         </DialogActions>
       </Dialog>

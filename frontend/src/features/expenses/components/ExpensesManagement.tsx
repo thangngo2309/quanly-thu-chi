@@ -30,6 +30,7 @@ import type { Expense, ExpensesSearchValues } from "../types/expense.types";
 import { deleteExpense, getExpenses } from "@/api/expenses.api";
 import { HDataTable, HMobileList } from "@/components/datatable";
 import { ExportExcelDialog } from "@/features/reports/components/ExportExcelDialog";
+import { useToast } from "@/components/toast/ToastProvider";
 
 const expenseCategoryOptions = [
   {
@@ -67,6 +68,7 @@ const defaultSearchValues: ExpensesSearchValues = {
 
 export function ExpensesManagement() {
   const { mounted, isMobile } = useResponsiveMode();
+  const toast = useToast();
 
   const searchMethods = useForm<ExpensesSearchValues>({
     defaultValues: defaultSearchValues,
@@ -77,10 +79,6 @@ export function ExpensesManagement() {
   const [loading, setLoading] = useState(false);
 
   const [actionLoading, setActionLoading] = useState(false);
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
 
@@ -99,7 +97,6 @@ export function ExpensesManagement() {
 
   const loadExpenses = useCallback(async () => {
     setLoading(true);
-    setErrorMessage(null);
 
     try {
       const response = await getExpenses({
@@ -115,7 +112,7 @@ export function ExpensesManagement() {
       setRowCount(response.meta.total);
       setTotalPages(response.meta.totalPages);
     } catch (error) {
-      setErrorMessage(
+      toast.error(
         getApiErrorMessage(error, "Không thể tải danh sách khoản chi.")
       );
     } finally {
@@ -177,17 +174,16 @@ export function ExpensesManagement() {
     }
 
     setActionLoading(true);
-    setErrorMessage(null);
 
     try {
       await deleteExpense(expenseToDelete.id);
 
       setExpenseToDelete(null);
-      setSuccessMessage("Đã xóa khoản chi thành công.");
+      toast.success("Đã xóa khoản chi thành công.");
 
       await loadExpenses();
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, "Không thể xóa khoản chi."));
+      toast.error(getApiErrorMessage(error, "Không thể xóa khoản chi."));
     } finally {
       setActionLoading(false);
     }
@@ -348,18 +344,6 @@ export function ExpensesManagement() {
         }}
       >
         <Stack spacing={2}>
-          {errorMessage && (
-            <Alert severity="error" onClose={() => setErrorMessage(null)}>
-              {errorMessage}
-            </Alert>
-          )}
-
-          {successMessage && (
-            <Alert severity="success" onClose={() => setSuccessMessage(null)}>
-              {successMessage}
-            </Alert>
-          )}
-
           {isMobile ? (
             <HMobileList<ExpensesSearchValues>
               title="Quản lý khoản chi"

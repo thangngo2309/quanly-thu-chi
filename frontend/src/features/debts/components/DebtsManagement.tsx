@@ -33,6 +33,7 @@ import type { DebtSearchValues, DebtSummary } from "../types/debt.types";
 import { downloadDebtsPdf, getDebts } from "@/api/debts.api";
 import { markSaleAsPaid } from "@/api/sales.api";
 import { HDataTable, HMobileList } from "@/components/datatable";
+import { useToast } from "@/components/toast/ToastProvider";
 
 const defaultSearchValues: DebtSearchValues = {
   customerName: "",
@@ -121,6 +122,7 @@ function getDebtStatus(status: PaymentStatus) {
 
 export function DebtsManagement() {
   const { mounted, isMobile } = useResponsiveMode();
+  const toast = useToast();
 
   const searchMethods = useForm<DebtSearchValues>({
     defaultValues: defaultSearchValues,
@@ -135,10 +137,6 @@ export function DebtsManagement() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const [actionLoading, setActionLoading] = useState(false);
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [saleToMarkPaid, setSaleToMarkPaid] = useState<Sale | null>(null);
 
@@ -157,7 +155,6 @@ export function DebtsManagement() {
 
   const loadDebts = useCallback(async () => {
     setLoading(true);
-    setErrorMessage(null);
 
     try {
       const response = await getDebts({
@@ -180,7 +177,7 @@ export function DebtsManagement() {
 
       setSummary(response.summary);
     } catch (error) {
-      setErrorMessage(
+      toast.error(
         getApiErrorMessage(error, "Không thể tải danh sách công nợ.")
       );
     } finally {
@@ -242,18 +239,17 @@ export function DebtsManagement() {
     }
 
     setActionLoading(true);
-    setErrorMessage(null);
 
     try {
       await markSaleAsPaid(saleToMarkPaid);
 
       setSaleToMarkPaid(null);
 
-      setSuccessMessage("Đã cập nhật khoản thu thành đã thanh toán.");
+      toast.success("Đã cập nhật khoản thu thành đã thanh toán.");
 
       await loadDebts();
     } catch (error) {
-      setErrorMessage(
+      toast.error(
         getApiErrorMessage(error, "Không thể cập nhật trạng thái thanh toán.")
       );
     } finally {
@@ -264,21 +260,19 @@ export function DebtsManagement() {
   const handleDownloadPdf = async (): Promise<void> => {
     const customerName = filters.customerName.trim();
     if (!customerName) {
-      setErrorMessage("Vui lòng chọn khách hàng trước khi tải PDF công nợ.");
+      toast.warning("Vui lòng chọn khách hàng trước khi tải PDF công nợ.");
       return;
     }
     setDownloadingPdf(true);
-    setErrorMessage(null);
     try {
       await downloadDebtsPdf({
         customerName,
         fromDate: filters.fromDate || undefined,
         toDate: filters.toDate || undefined,
       });
+      toast.success(`Đã tạo file PDF công nợ của ${customerName}.`);
     } catch (error) {
-      setErrorMessage(
-        getApiErrorMessage(error, "Không thể tải file PDF công nợ.")
-      );
+      toast.error(getApiErrorMessage(error, "Không thể tải file PDF công nợ."));
     } finally {
       setDownloadingPdf(false);
     }
@@ -492,7 +486,7 @@ export function DebtsManagement() {
           whiteSpace: "nowrap",
         }}
       >
-        {downloadingPdf ? 'Đang tạo...' : 'Tải PDF công nợ'}
+        {downloadingPdf ? "Đang tạo..." : "Tải PDF công nợ"}
       </Button>
 
       <Link
@@ -552,18 +546,6 @@ export function DebtsManagement() {
         }}
       >
         <Stack spacing={2}>
-          {errorMessage && (
-            <Alert severity="error" onClose={() => setErrorMessage(null)}>
-              {errorMessage}
-            </Alert>
-          )}
-
-          {successMessage && (
-            <Alert severity="success" onClose={() => setSuccessMessage(null)}>
-              {successMessage}
-            </Alert>
-          )}
-
           <Box
             sx={{
               display: "grid",

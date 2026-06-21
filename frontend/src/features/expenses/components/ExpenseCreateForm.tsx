@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   Alert,
@@ -11,87 +11,72 @@ import {
   Paper,
   Stack,
   Typography,
-} from '@mui/material';
-import axios from 'axios';
-import dayjs from 'dayjs';
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-import {
-  type SubmitHandler,
-  useForm,
-  useWatch,
-} from 'react-hook-form';
+} from "@mui/material";
+import axios from "axios";
+import dayjs from "dayjs";
+import { useEffect, useMemo, useState } from "react";
+import { type SubmitHandler, useForm, useWatch } from "react-hook-form";
 
-import {
-  HDatePicker,
-  HDropdown,
-  HForm,
-  HInput,
-} from '@/components/form';
-import { formatVnd } from '@/utils/currency';
-import type {
-  Expense,
-  ExpenseFormValues,
-} from '../types/expense.types';
-import { createExpense } from '@/api/expenses.api';
+import { HDatePicker, HDropdown, HForm, HInput } from "@/components/form";
+import { formatVnd } from "@/utils/currency";
+import type { Expense, ExpenseFormValues } from "../types/expense.types";
+import { createExpense } from "@/api/expenses.api";
+import { useToast } from "@/components/toast/ToastProvider";
+import { getApiErrorMessage } from "@/utils/api-error";
 
 const expenseCategoryOptions = [
   {
-    label: 'Nguyên vật liệu',
-    value: 'Nguyên vật liệu',
+    label: "Nguyên vật liệu",
+    value: "Nguyên vật liệu",
   },
   {
-    label: 'Vận chuyển',
-    value: 'Vận chuyển',
+    label: "Vận chuyển",
+    value: "Vận chuyển",
   },
   {
-    label: 'Điện, nước',
-    value: 'Điện, nước',
+    label: "Điện, nước",
+    value: "Điện, nước",
   },
   {
-    label: 'Nhân công',
-    value: 'Nhân công',
+    label: "Nhân công",
+    value: "Nhân công",
   },
   {
-    label: 'Thuê mặt bằng',
-    value: 'Thuê mặt bằng',
+    label: "Thuê mặt bằng",
+    value: "Thuê mặt bằng",
   },
   {
-    label: 'Chi phí khác',
-    value: 'Chi phí khác',
+    label: "Chi phí khác",
+    value: "Chi phí khác",
   },
 ];
 
 const defaultValues: ExpenseFormValues = {
-  content: '',
-  category: '',
-  amount: '',
-  expenseDate: '',
-  note: '',
+  content: "",
+  category: "",
+  amount: "",
+  expenseDate: "",
+  note: "",
 };
 
 function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    const responseMessage =
-      error.response?.data?.message;
+    const responseMessage = error.response?.data?.message;
 
     if (Array.isArray(responseMessage)) {
-      return responseMessage.join(', ');
+      return responseMessage.join(", ");
     }
 
-    if (typeof responseMessage === 'string') {
+    if (typeof responseMessage === "string") {
       return responseMessage;
     }
 
-    if (error.code === 'ECONNABORTED') {
-      return 'Máy chủ phản hồi quá chậm. Vui lòng thử lại.';
+    if (error.code === "ECONNABORTED") {
+      return "Máy chủ phản hồi quá chậm. Vui lòng thử lại.";
     }
 
     if (!error.response) {
-      return 'Không thể kết nối đến máy chủ.';
+      return "Không thể kết nối đến máy chủ.";
     }
   }
 
@@ -99,42 +84,32 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return 'Đã xảy ra lỗi khi lưu khoản chi.';
+  return "Đã xảy ra lỗi khi lưu khoản chi.";
 }
 
 export function ExpenseCreateForm() {
+  const toast = useToast();
   const methods = useForm<ExpenseFormValues>({
     defaultValues,
-    mode: 'onBlur',
+    mode: "onBlur",
   });
 
   const {
     control,
     reset,
     setValue,
-    formState: {
-      isSubmitting,
-    },
+    formState: { isSubmitting },
   } = methods;
-
-  const [successExpense, setSuccessExpense] =
-    useState<Expense | null>(null);
-
-  const [errorMessage, setErrorMessage] =
-    useState<string | null>(null);
 
   const amountValue = useWatch({
     control,
-    name: 'amount',
+    name: "amount",
   });
 
   const amount = useMemo(() => {
     const parsedAmount = Number(amountValue);
 
-    if (
-      !Number.isFinite(parsedAmount) ||
-      parsedAmount <= 0
-    ) {
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       return 0;
     }
 
@@ -142,57 +117,41 @@ export function ExpenseCreateForm() {
   }, [amountValue]);
 
   useEffect(() => {
-    setValue(
-      'expenseDate',
-      dayjs().format('YYYY-MM-DD'),
-      {
-        shouldDirty: false,
-        shouldValidate: false,
-      },
-    );
+    setValue("expenseDate", dayjs().format("YYYY-MM-DD"), {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
   }, [setValue]);
 
   const handleReset = (): void => {
     reset({
       ...defaultValues,
-      expenseDate: dayjs().format('YYYY-MM-DD'),
+      expenseDate: dayjs().format("YYYY-MM-DD"),
     });
-
-    setSuccessExpense(null);
-    setErrorMessage(null);
   };
 
-  const onSubmit: SubmitHandler<
-    ExpenseFormValues
-  > = async (values) => {
-    setSuccessExpense(null);
-    setErrorMessage(null);
-
+  const onSubmit: SubmitHandler<ExpenseFormValues> = async (values) => {
     try {
-      const normalizedAmount = Number(
-        values.amount,
-      );
+      const normalizedAmount = Number(values.amount);
 
       const expense = await createExpense({
         content: values.content.trim(),
-        category:
-          values.category.trim() || undefined,
+        category: values.category.trim() || undefined,
         amount: normalizedAmount,
         expenseDate: values.expenseDate,
         note: values.note.trim() || undefined,
       });
 
-      setSuccessExpense(expense);
+      toast.success(
+        `Đã lưu khoản chi ${formatVnd(expense.amount)} thành công.`
+      );
 
       reset({
         ...defaultValues,
-        expenseDate:
-          dayjs().format('YYYY-MM-DD'),
+        expenseDate: dayjs().format("YYYY-MM-DD"),
       });
     } catch (error) {
-      setErrorMessage(
-        getErrorMessage(error),
-      );
+      toast.error(getApiErrorMessage(error, "Không thể lưu khoản chi."));
     }
   };
 
@@ -200,10 +159,10 @@ export function ExpenseCreateForm() {
     <Card
       elevation={0}
       sx={{
-        border: '1px solid',
-        borderColor: 'divider',
+        border: "1px solid",
+        borderColor: "divider",
         borderRadius: 3,
-        overflow: 'hidden',
+        overflow: "hidden",
       }}
     >
       <CardContent
@@ -224,12 +183,8 @@ export function ExpenseCreateForm() {
             Nhập khoản chi
           </Typography>
 
-          <Typography
-            variant="body2"
-            color="text.secondary"
-          >
-            Ghi nhận các khoản chi phí phát sinh
-            trong quá trình hoạt động.
+          <Typography variant="body2" color="text.secondary">
+            Ghi nhận các khoản chi phí phát sinh trong quá trình hoạt động.
           </Typography>
         </Stack>
       </CardContent>
@@ -244,43 +199,8 @@ export function ExpenseCreateForm() {
           },
         }}
       >
-        <HForm
-          methods={methods}
-          onSubmit={onSubmit}
-        >
+        <HForm methods={methods} onSubmit={onSubmit}>
           <Stack spacing={3}>
-            {successExpense && (
-              <Alert
-                severity="success"
-                onClose={() =>
-                  setSuccessExpense(null)
-                }
-              >
-                Đã lưu khoản chi{' '}
-                <strong>
-                  {successExpense.content}
-                </strong>{' '}
-                với số tiền{' '}
-                <strong>
-                  {formatVnd(
-                    successExpense.amount,
-                  )}
-                </strong>
-                .
-              </Alert>
-            )}
-
-            {errorMessage && (
-              <Alert
-                severity="error"
-                onClose={() =>
-                  setErrorMessage(null)
-                }
-              >
-                {errorMessage}
-              </Alert>
-            )}
-
             <HInput<ExpenseFormValues>
               name="content"
               label="Nội dung khoản chi"
@@ -288,20 +208,18 @@ export function ExpenseCreateForm() {
               multiline
               minRows={3}
               rules={{
-                required:
-                  'Vui lòng nhập nội dung khoản chi',
+                required: "Vui lòng nhập nội dung khoản chi",
                 validate: (value) =>
-                  value.trim().length > 0 ||
-                  'Vui lòng nhập nội dung khoản chi',
+                  value.trim().length > 0 || "Vui lòng nhập nội dung khoản chi",
               }}
             />
 
             <Box
               sx={{
-                display: 'grid',
+                display: "grid",
                 gridTemplateColumns: {
-                  xs: '1fr',
-                  md: 'repeat(2, minmax(0, 1fr))',
+                  xs: "1fr",
+                  md: "repeat(2, minmax(0, 1fr))",
                 },
                 gap: 2,
               }}
@@ -317,8 +235,7 @@ export function ExpenseCreateForm() {
                 name="expenseDate"
                 label="Ngày chi"
                 rules={{
-                  required:
-                    'Vui lòng chọn ngày chi',
+                  required: "Vui lòng chọn ngày chi",
                 }}
               />
             </Box>
@@ -332,23 +249,18 @@ export function ExpenseCreateForm() {
                 htmlInput: {
                   min: 1,
                   step: 1000,
-                  inputMode: 'numeric',
+                  inputMode: "numeric",
                 },
               }}
               rules={{
-                required:
-                  'Vui lòng nhập số tiền chi',
+                required: "Vui lòng nhập số tiền chi",
 
                 validate: {
                   validNumber: (value) =>
-                    Number.isFinite(
-                      Number(value),
-                    ) ||
-                    'Số tiền không hợp lệ',
+                    Number.isFinite(Number(value)) || "Số tiền không hợp lệ",
 
                   greaterThanZero: (value) =>
-                    Number(value) > 0 ||
-                    'Số tiền phải lớn hơn 0',
+                    Number(value) > 0 || "Số tiền phải lớn hơn 0",
                 },
               }}
             />
@@ -362,8 +274,7 @@ export function ExpenseCreateForm() {
               rules={{
                 maxLength: {
                   value: 1000,
-                  message:
-                    'Ghi chú không quá 1.000 ký tự',
+                  message: "Ghi chú không quá 1.000 ký tự",
                 },
               }}
             />
@@ -373,13 +284,10 @@ export function ExpenseCreateForm() {
               sx={{
                 p: 2,
                 borderRadius: 2,
-                backgroundColor: 'action.hover',
+                backgroundColor: "action.hover",
               }}
             >
-              <Typography
-                variant="body2"
-                color="text.secondary"
-              >
+              <Typography variant="body2" color="text.secondary">
                 Tổng khoản chi đang nhập
               </Typography>
 
@@ -388,7 +296,7 @@ export function ExpenseCreateForm() {
                 sx={{
                   mt: 0.5,
                   fontWeight: 900,
-                  color: 'error.main',
+                  color: "error.main",
                 }}
               >
                 {formatVnd(amount)}
@@ -397,12 +305,12 @@ export function ExpenseCreateForm() {
 
             <Stack
               direction={{
-                xs: 'column-reverse',
-                sm: 'row',
+                xs: "column-reverse",
+                sm: "row",
               }}
               spacing={1.5}
               sx={{
-                justifyContent: 'flex-end',
+                justifyContent: "flex-end",
               }}
             >
               <Button
@@ -438,9 +346,7 @@ export function ExpenseCreateForm() {
                   />
                 )}
 
-                {isSubmitting
-                  ? 'Đang lưu...'
-                  : 'Lưu khoản chi'}
+                {isSubmitting ? "Đang lưu..." : "Lưu khoản chi"}
               </Button>
             </Stack>
           </Stack>

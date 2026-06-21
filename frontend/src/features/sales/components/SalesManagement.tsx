@@ -32,6 +32,7 @@ import type {
 import { HDataTable, HMobileList } from "@/components/datatable";
 import { deleteSale, getSales, markSaleAsPaid } from "@/api/sales.api";
 import { ExportExcelDialog } from "@/features/reports/components/ExportExcelDialog";
+import { useToast } from "@/components/toast/ToastProvider";
 
 const defaultSearchValues: SalesSearchValues = {
   q: "",
@@ -80,6 +81,7 @@ function getStatusConfig(status: PaymentStatus) {
 
 export function SalesManagement() {
   const { mounted, isMobile } = useResponsiveMode();
+  const toast = useToast();
 
   const searchMethods = useForm<SalesSearchValues>({
     defaultValues: defaultSearchValues,
@@ -90,10 +92,6 @@ export function SalesManagement() {
   const [loading, setLoading] = useState(false);
 
   const [actionLoading, setActionLoading] = useState(false);
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
 
@@ -114,7 +112,6 @@ export function SalesManagement() {
 
   const loadSales = useCallback(async () => {
     setLoading(true);
-    setErrorMessage(null);
 
     try {
       const response = await getSales({
@@ -130,7 +127,7 @@ export function SalesManagement() {
       setRowCount(response.meta.total);
       setTotalPages(response.meta.totalPages);
     } catch (error) {
-      setErrorMessage(
+      toast.error(
         getApiErrorMessage(error, "Không thể tải danh sách khoản thu.")
       );
     } finally {
@@ -192,17 +189,16 @@ export function SalesManagement() {
     }
 
     setActionLoading(true);
-    setErrorMessage(null);
 
     try {
       await deleteSale(saleToDelete.id);
 
       setSaleToDelete(null);
-      setSuccessMessage("Đã xóa khoản thu thành công.");
+      toast.success("Đã xóa khoản thu thành công.");
 
       await loadSales();
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, "Không thể xóa khoản thu."));
+      toast.error(getApiErrorMessage(error, "Không thể xóa khoản thu."));
     } finally {
       setActionLoading(false);
     }
@@ -214,19 +210,16 @@ export function SalesManagement() {
     }
 
     setActionLoading(true);
-    setErrorMessage(null);
 
     try {
       await markSaleAsPaid(saleToMarkPaid);
 
       setSaleToMarkPaid(null);
-      setSuccessMessage("Đã cập nhật khách hàng thanh toán đủ.");
+      toast.success("Đã cập nhật khách hàng thanh toán đủ.");
 
       await loadSales();
     } catch (error) {
-      setErrorMessage(
-        getApiErrorMessage(error, "Không thể cập nhật khoản thu.")
-      );
+      toast.error(getApiErrorMessage(error, "Không thể cập nhật khoản thu."));
     } finally {
       setActionLoading(false);
     }
@@ -428,18 +421,6 @@ export function SalesManagement() {
         }}
       >
         <Stack spacing={2}>
-          {errorMessage && (
-            <Alert severity="error" onClose={() => setErrorMessage(null)}>
-              {errorMessage}
-            </Alert>
-          )}
-
-          {successMessage && (
-            <Alert severity="success" onClose={() => setSuccessMessage(null)}>
-              {successMessage}
-            </Alert>
-          )}
-
           {isMobile ? (
             <HMobileList<SalesSearchValues>
               title="Quản lý khoản thu"

@@ -24,6 +24,8 @@ import { formatVnd } from "@/utils/currency";
 import type { Sale, SaleFormValues } from "../types/sale.types";
 import { createSale } from "@/api/sales.api";
 import { HCustomerAutocomplete } from "@/components/form/HCustomerAutocomplete";
+import { useToast } from "@/components/toast/ToastProvider";
+import { getApiErrorMessage } from "@/utils/api-error";
 
 const defaultValues: SaleFormValues = {
   customerName: "",
@@ -63,6 +65,8 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function SaleCreateForm() {
+  const toast = useToast();
+
   const methods = useForm<SaleFormValues>({
     defaultValues,
     mode: "onBlur",
@@ -78,10 +82,6 @@ export function SaleCreateForm() {
   useEffect(() => {
     setValue("saleDate", dayjs().format("YYYY-MM-DD"));
   }, [setValue]);
-
-  const [successSale, setSuccessSale] = useState<Sale | null>(null);
-
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const totalAmountValue = useWatch({
     control,
@@ -104,9 +104,6 @@ export function SaleCreateForm() {
   const remainingAmount = totalAmount - paidAmount;
 
   const onSubmit: SubmitHandler<SaleFormValues> = async (values) => {
-    setErrorMessage(null);
-    setSuccessSale(null);
-
     try {
       const normalizedTotalAmount = Number(values.totalAmount);
 
@@ -119,14 +116,14 @@ export function SaleCreateForm() {
         note: values.note.trim() || undefined,
       });
 
-      setSuccessSale(sale);
+      toast.success(`Đã tạo khoản thu của ${sale.customerName} thành công.`);
 
       reset({
         ...defaultValues,
         saleDate: dayjs().format("YYYY-MM-DD"),
       });
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      toast.error(getApiErrorMessage(error, "Không thể lưu khoản thu."));
     }
   };
 
@@ -171,19 +168,6 @@ export function SaleCreateForm() {
       >
         <HForm methods={methods} onSubmit={onSubmit}>
           <Stack spacing={3}>
-            {successSale && (
-              <Alert severity="success" onClose={() => setSuccessSale(null)}>
-                Đã lưu khoản thu của <strong>{successSale.customerName}</strong>
-                , số tiền <strong>{formatVnd(successSale.totalAmount)}</strong>.
-              </Alert>
-            )}
-
-            {errorMessage && (
-              <Alert severity="error" onClose={() => setErrorMessage(null)}>
-                {errorMessage}
-              </Alert>
-            )}
-
             <Box
               sx={{
                 display: "grid",
@@ -384,9 +368,6 @@ export function SaleCreateForm() {
                     ...defaultValues,
                     saleDate: dayjs().format("YYYY-MM-DD"),
                   });
-
-                  setErrorMessage(null);
-                  setSuccessSale(null);
                 }}
                 sx={{
                   minHeight: 44,
