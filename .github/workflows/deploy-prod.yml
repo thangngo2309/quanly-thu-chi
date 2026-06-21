@@ -52,6 +52,9 @@ jobs:
           COMPOSE_FILE="docker-compose.prod.yml"
           ENV_FILE=".env.prod"
 
+          BACKEND_URL="http://127.0.0.1:6200/api/health"
+          FRONTEND_URL="http://127.0.0.1:6201/thuchi"
+
           echo "========================================"
           echo "DEPLOY QUAN LY THU CHI"
           echo "========================================"
@@ -61,15 +64,22 @@ jobs:
           echo "==> Lấy source mới nhất"
           git fetch --prune origin "$BRANCH"
 
-          if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+          if git show-ref \
+            --verify \
+            --quiet \
+            "refs/heads/$BRANCH"
+          then
             git checkout "$BRANCH"
           else
-            git checkout -b "$BRANCH" "origin/$BRANCH"
+            git checkout \
+              -b "$BRANCH" \
+              "origin/$BRANCH"
           fi
 
           git reset --hard "origin/$BRANCH"
 
           echo "==> Kiểm tra file production"
+
           test -f "$ENV_FILE" || {
             echo "Không tìm thấy $PROJECT_DIR/$ENV_FILE"
             exit 1
@@ -81,112 +91,248 @@ jobs:
           }
 
           echo "==> Kiểm tra shared database network"
-          docker network inspect shared-database-network-prod \
+
+          docker network inspect \
+            shared-database-network-prod \
             >/dev/null 2>&1 || {
               echo "Không tìm thấy shared-database-network-prod"
               exit 1
             }
 
           echo "==> Kiểm tra PostgreSQL dùng chung"
-          docker inspect quanly-xegh-postgres-prod \
+
+          docker inspect \
+            quanly-xegh-postgres-prod \
             >/dev/null 2>&1 || {
               echo "Không tìm thấy container PostgreSQL dùng chung"
               exit 1
             }
 
-          POSTGRES_RUNNING="$(docker inspect \
-            --format='{{.State.Running}}' \
-            quanly-xegh-postgres-prod)"
+          POSTGRES_RUNNING="$(
+            docker inspect \
+              --format='{{.State.Running}}' \
+              quanly-xegh-postgres-prod
+          )"
 
           if [ "$POSTGRES_RUNNING" != "true" ]; then
             echo "PostgreSQL dùng chung không chạy."
-            docker logs --tail=150 quanly-xegh-postgres-prod || true
+
+            docker logs \
+              --tail=150 \
+              quanly-xegh-postgres-prod \
+              || true
+
             exit 1
           fi
 
           echo "==> Kiểm tra Docker Compose"
+
           docker compose \
             --env-file "$ENV_FILE" \
             -f "$COMPOSE_FILE" \
-            config >/dev/null
+            config \
+            >/dev/null
 
           echo "==> Xóa init-db cũ để chạy lại"
+
           docker compose \
             --env-file "$ENV_FILE" \
             -f "$COMPOSE_FILE" \
-            rm -sf init-db || true
+            rm -sf init-db \
+            || true
 
           echo "==> Build và chạy container"
+
           docker compose \
             --env-file "$ENV_FILE" \
             -f "$COMPOSE_FILE" \
-            up -d --build --remove-orphans
+            up -d \
+            --build \
+            --remove-orphans
 
-          echo "==> Chờ ứng dụng khởi động"
-          sleep 12
+          echo "==> Chờ init database hoàn thành"
 
-          echo "==> Kiểm tra init database"
-          INIT_EXIT_CODE="$(docker inspect \
-            --format='{{.State.ExitCode}}' \
-            qltc-init-db-prod 2>/dev/null || echo 1)"
+          INIT_FINISHED=false
 
-          if [ "$INIT_EXIT_CODE" != "0" ]; then
-            echo "Khởi tạo database thất bại."
-            docker logs --tail=150 qltc-init-db-prod || true
+          for ATTEMPT in $(seq 1 30); do
+            INIT_STATUS="$(
+              docker inspect \
+                --format='{{.State.Status}}' \
+                qltc-init-db-prod \
+                2>/dev/null \
+                || echo "not-found"
+            )"
+
+            if [ "$INIT_STATUS" = "exited" ]; then
+              INIT_FINISHED=true
+              break
+            fi
+
+            if [ "$INIT_STATUS" = "dead" ]; then
+              echo "Container init database đã chết."
+              break
+            fi
+
+            echo "Đang chờ init database... ${ATTEMPT}/30"
+            sleep 2
+          done
+
+          if [ "$INIT_FINISHED" != "true" ]; then
+            echo "Init database không hoàn thành đúng thời gian."
+
+            docker logs \
+              --tail=150 \
+              qltc-init-db-prod \
+              || true
+
             exit 1
           fi
 
-          echo "==> Kiểm tra Backend và Frontend"
+          echo "==> Kiểm tra kết quả init database"
+
+          INIT_EXIT_CODE="$(
+            docker inspect \
+              --format='{{.State.ExitCode}}' \
+              qltc-init-db-prod \
+              2>/dev/null \
+              || echo 1
+          )"
+
+          if [ "$INIT_EXIT_CODE" != "0" ]; then
+            echo "Khởi tạo database thất bại."
+
+            docker logs \
+              --tail=150 \
+              qltc-init-db-prod \
+              || true
+
+            exit 1
+          fi
+
+          echo "Init database thành công."
+
+          echo "==> Kiểm tra Backend và Frontend container"
 
           for CONTAINER in \
             qltc-backend-prod \
             qltc-frontend-prod
           do
-            RUNNING="$(docker inspect \
-              --format='{{.State.Running}}' \
-              "$CONTAINER" 2>/dev/null || echo false)"
+            RUNNING="$(
+              docker inspect \
+                --format='{{.State.Running}}' \
+                "$CONTAINER" \
+                2>/dev/null \
+                || echo false
+            )"
 
             if [ "$RUNNING" != "true" ]; then
               echo "Container $CONTAINER không chạy."
-              docker logs --tail=150 "$CONTAINER" || true
+
+              docker logs \
+                --tail=150 \
+                "$CONTAINER" \
+                || true
+
               exit 1
             fi
           done
 
-          echo "==> Kiểm tra Backend"
+          echo "==> Chờ Backend sẵn sàng"
 
-          curl --fail \
-          --silent \
-          --show-error \
-          --max-time 15 \
-          "http://127.0.0.1:6200/api/sales?page=1&limit=1" \
-          >/dev/null || {
-            echo "Backend không phản hồi."
-            docker logs --tail=150 qltc-backend-prod || true
+          BACKEND_READY=false
+
+          for ATTEMPT in $(seq 1 30); do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              "$BACKEND_URL" \
+              >/dev/null
+            then
+              BACKEND_READY=true
+              echo "Backend đã sẵn sàng."
+              break
+            fi
+
+            echo "Đang chờ Backend... ${ATTEMPT}/30"
+            sleep 2
+          done
+
+          if [ "$BACKEND_READY" != "true" ]; then
+            echo "Backend không sẵn sàng sau 60 giây."
+
+            docker logs \
+              --tail=200 \
+              qltc-backend-prod \
+              || true
+
             exit 1
-          }
+          fi
 
-          echo "==> Kiểm tra Frontend"
+          echo "==> Chờ Frontend sẵn sàng"
 
-          curl --fail \
-          --location \
-          --silent \
-          --show-error \
-          --max-time 15 \
-          "http://127.0.0.1:6201/thuchi" \
-          >/dev/null || {
-            echo "Frontend không phản hồi."
-            docker logs --tail=150 qltc-frontend-prod || true
+          FRONTEND_READY=false
+
+          for ATTEMPT in $(seq 1 30); do
+            if curl \
+              --fail \
+              --location \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              "$FRONTEND_URL" \
+              >/dev/null
+            then
+              FRONTEND_READY=true
+              echo "Frontend đã sẵn sàng."
+              break
+            fi
+
+            echo "Đang chờ Frontend... ${ATTEMPT}/30"
+            sleep 2
+          done
+
+          if [ "$FRONTEND_READY" != "true" ]; then
+            echo "Frontend không sẵn sàng sau 60 giây."
+
+            docker logs \
+              --tail=200 \
+              qltc-frontend-prod \
+              || true
+
             exit 1
-          }
+          fi
+
+          echo "==> Kiểm tra nội dung Backend health"
+
+          BACKEND_HEALTH="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              "$BACKEND_URL"
+          )"
+
+          echo "$BACKEND_HEALTH"
+
+          echo "$BACKEND_HEALTH" \
+            | grep -q '"status":"ok"' \
+            || {
+              echo "Backend health trả về nội dung không hợp lệ."
+              exit 1
+            }
 
           echo "==> Trạng thái container"
+
           docker compose \
             --env-file "$ENV_FILE" \
             -f "$COMPOSE_FILE" \
             ps -a
 
           echo "==> Xóa image dangling"
+
           docker image prune -f
 
           echo "========================================"
