@@ -1,0 +1,189 @@
+name: Deploy Thu Chi Production
+
+on:
+  push:
+    branches:
+      - master
+
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-thuchi-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-prod:
+    name: Deploy Thu Chi PROD
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Install sshpass
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Configure VPS host key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          ssh-keyscan \
+            -p 22 \
+            -H 157.66.100.68 \
+            >> ~/.ssh/known_hosts
+
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy Thu Chi to production
+        env:
+          PROD_PASS: ${{ secrets.PROD_SSH_PASSWORD }}
+        run: |
+          sshpass -p "$PROD_PASS" ssh \
+            -p 22 \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            root@157.66.100.68 \
+            'bash -se' <<'EOF'
+
+          set -Eeuo pipefail
+
+          PROJECT_DIR="/root/quanly-thu-chi"
+          BRANCH="master"
+          COMPOSE_FILE="docker-compose.prod.yml"
+          ENV_FILE=".env.prod"
+
+          echo "========================================"
+          echo "DEPLOY QUAN LY THU CHI"
+          echo "========================================"
+
+          cd "$PROJECT_DIR"
+
+          echo "==> Lấy source mới nhất"
+          git fetch --prune origin "$BRANCH"
+
+          if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+            git checkout "$BRANCH"
+          else
+            git checkout -b "$BRANCH" "origin/$BRANCH"
+          fi
+
+          git reset --hard "origin/$BRANCH"
+
+          echo "==> Kiểm tra file production"
+          test -f "$ENV_FILE" || {
+            echo "Không tìm thấy $PROJECT_DIR/$ENV_FILE"
+            exit 1
+          }
+
+          test -f "$COMPOSE_FILE" || {
+            echo "Không tìm thấy $PROJECT_DIR/$COMPOSE_FILE"
+            exit 1
+          }
+
+          echo "==> Kiểm tra shared database network"
+          docker network inspect shared-database-network-prod \
+            >/dev/null 2>&1 || {
+              echo "Không tìm thấy shared-database-network-prod"
+              exit 1
+            }
+
+          echo "==> Kiểm tra PostgreSQL dùng chung"
+          docker inspect quanly-xegh-postgres-prod \
+            >/dev/null 2>&1 || {
+              echo "Không tìm thấy container PostgreSQL dùng chung"
+              exit 1
+            }
+
+          POSTGRES_RUNNING="$(docker inspect \
+            --format='{{.State.Running}}' \
+            quanly-xegh-postgres-prod)"
+
+          if [ "$POSTGRES_RUNNING" != "true" ]; then
+            echo "PostgreSQL dùng chung không chạy."
+            docker logs --tail=150 quanly-xegh-postgres-prod || true
+            exit 1
+          fi
+
+          echo "==> Kiểm tra Docker Compose"
+          docker compose \
+            --env-file "$ENV_FILE" \
+            -f "$COMPOSE_FILE" \
+            config >/dev/null
+
+          echo "==> Xóa init-db cũ để chạy lại"
+          docker compose \
+            --env-file "$ENV_FILE" \
+            -f "$COMPOSE_FILE" \
+            rm -sf init-db || true
+
+          echo "==> Build và chạy container"
+          docker compose \
+            --env-file "$ENV_FILE" \
+            -f "$COMPOSE_FILE" \
+            up -d --build --remove-orphans
+
+          echo "==> Chờ ứng dụng khởi động"
+          sleep 12
+
+          echo "==> Kiểm tra init database"
+          INIT_EXIT_CODE="$(docker inspect \
+            --format='{{.State.ExitCode}}' \
+            qltc-init-db-prod 2>/dev/null || echo 1)"
+
+          if [ "$INIT_EXIT_CODE" != "0" ]; then
+            echo "Khởi tạo database thất bại."
+            docker logs --tail=150 qltc-init-db-prod || true
+            exit 1
+          fi
+
+          echo "==> Kiểm tra Backend và Frontend"
+
+          for CONTAINER in \
+            qltc-backend-prod \
+            qltc-frontend-prod
+          do
+            RUNNING="$(docker inspect \
+              --format='{{.State.Running}}' \
+              "$CONTAINER" 2>/dev/null || echo false)"
+
+            if [ "$RUNNING" != "true" ]; then
+              echo "Container $CONTAINER không chạy."
+              docker logs --tail=150 "$CONTAINER" || true
+              exit 1
+            fi
+          done
+
+          echo "==> Kiểm tra Backend"
+          curl --fail --silent --show-error \
+            --max-time 15 \
+            http://127.0.0.1:6200/api \
+            >/dev/null || {
+              echo "Backend không phản hồi tại cổng 6200."
+              docker logs --tail=150 qltc-backend-prod || true
+              exit 1
+            }
+
+          echo "==> Kiểm tra Frontend"
+          curl --fail --silent --show-error \
+            --max-time 15 \
+            http://127.0.0.1:6201/thuchi \
+            >/dev/null || {
+              echo "Frontend không phản hồi tại cổng 6201."
+              docker logs --tail=150 qltc-frontend-prod || true
+              exit 1
+            }
+
+          echo "==> Trạng thái container"
+          docker compose \
+            --env-file "$ENV_FILE" \
+            -f "$COMPOSE_FILE" \
+            ps -a
+
+          echo "==> Xóa image dangling"
+          docker image prune -f
+
+          echo "========================================"
+          echo "DEPLOY THU CHI THÀNH CÔNG"
+          echo "========================================"
+          EOF
+
