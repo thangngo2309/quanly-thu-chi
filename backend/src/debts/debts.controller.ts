@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
 
 import { DebtsPdfService } from './debts-pdf.service';
@@ -6,6 +6,8 @@ import { DebtsService } from './debts.service';
 import { DebtQueryDto } from './dto/debt-query.dto';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums/user-role.enum';
+import { CreatePublicDebtLinkDto } from './dto/create-public-debt-link.dto';
+import { PublicDebtsService } from './public-debts.service';
 
 @Controller('debts')
 @Roles(UserRole.SYSTEM_ADMIN)
@@ -14,6 +16,8 @@ export class DebtsController {
     private readonly debtsService: DebtsService,
 
     private readonly debtsPdfService: DebtsPdfService,
+
+    private readonly publicDebtsService: PublicDebtsService,
   ) {}
 
   @Get('export-pdf')
@@ -48,5 +52,11 @@ export class DebtsController {
     query: DebtQueryDto,
   ) {
     return this.debtsService.findAll(query);
+  }
+
+  @Post('public-link') createPublicDebtLink(
+    @Body() dto: CreatePublicDebtLinkDto,
+  ) {
+    return this.publicDebtsService.createPublicLink(dto);
   }
 }

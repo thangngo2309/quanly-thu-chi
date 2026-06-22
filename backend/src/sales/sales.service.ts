@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -113,6 +114,10 @@ export class SalesService {
   async update(id: string, updateSaleDto: UpdateSaleDto): Promise<Sale> {
     const sale = await this.findOne(id);
 
+    if (sale.pendingDebtPaymentRequestId) {
+      throw new ConflictException('Khoản thu đang chờ xác nhận thanh toán');
+    }
+
     const totalAmount = Number(updateSaleDto.totalAmount ?? sale.totalAmount);
 
     const paidAmount = Number(updateSaleDto.paidAmount ?? sale.paidAmount);
@@ -176,72 +181,44 @@ export class SalesService {
   ): Promise<string[]> {
     const keyword = query.q?.trim() ?? '';
     const limit = query.limit ?? 20;
-  
+
     const queryBuilder = this.saleRepository
       .createQueryBuilder('sale')
-      .select(
-        'sale.customerName',
-        'customerName',
-      )
-      .addSelect(
-        'MAX(sale.saleDate)',
-        'lastSaleDate',
-      )
-      .where(
-        `TRIM(COALESCE(sale.customerName, '')) <> ''`,
-      );
-  
+      .select('sale.customerName', 'customerName')
+      .addSelect('MAX(sale.saleDate)', 'lastSaleDate')
+      .where(`TRIM(COALESCE(sale.customerName, '')) <> ''`);
+
     if (keyword) {
-      queryBuilder.andWhere(
-        'sale.customerName ILIKE :keyword',
-        {
-          keyword: `%${keyword}%`,
-        },
-      );
+      queryBuilder.andWhere('sale.customerName ILIKE :keyword', {
+        keyword: `%${keyword}%`,
+      });
     }
-  
+
     const rows = await queryBuilder
       .groupBy('sale.customerName')
-      .orderBy(
-        'MAX(sale.saleDate)',
-        'DESC',
-      )
+      .orderBy('MAX(sale.saleDate)', 'DESC')
       .limit(limit)
       .getRawMany<{
         customerName: string;
         lastSaleDate: string;
       }>();
-  
-    const uniqueCustomers =
-      new Map<string, string>();
-  
+
+    const uniqueCustomers = new Map<string, string>();
+
     for (const row of rows) {
-      const customerName =
-        row.customerName?.trim();
-  
+      const customerName = row.customerName?.trim();
+
       if (!customerName) {
         continue;
       }
-  
-      const normalizedName =
-        customerName.toLocaleLowerCase(
-          'vi-VN',
-        );
-  
-      if (
-        !uniqueCustomers.has(
-          normalizedName,
-        )
-      ) {
-        uniqueCustomers.set(
-          normalizedName,
-          customerName,
-        );
+
+      const normalizedName = customerName.toLocaleLowerCase('vi-VN');
+
+      if (!uniqueCustomers.has(normalizedName)) {
+        uniqueCustomers.set(normalizedName, customerName);
       }
     }
-  
-    return Array.from(
-      uniqueCustomers.values(),
-    ).slice(0, limit);
+
+    return Array.from(uniqueCustomers.values()).slice(0, limit);
   }
 }

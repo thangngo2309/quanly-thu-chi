@@ -410,17 +410,17 @@ export function DashboardOverview() {
             onApply={(values) => {
               setFilters(values);
             }}
-          />{" "}
+          />
           <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-            {" "}
-            Dữ liệu đang hiển thị:{" "}
+            
+            Dữ liệu đang hiển thị:
             <Box
               component="span"
               sx={{ fontWeight: 800, color: "text.primary" }}
             >
-              {" "}
-              {selectedDateLabel}{" "}
-            </Box>{" "}
+              
+              {selectedDateLabel}
+            </Box>
           </Typography>
           {errorMessage && (
             <Alert severity="error" onClose={() => setErrorMessage(null)}>

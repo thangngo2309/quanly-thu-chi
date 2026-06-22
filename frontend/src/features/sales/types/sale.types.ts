@@ -1,11 +1,6 @@
-export type PaymentStatus =
-  | 'UNPAID'
-  | 'PARTIAL'
-  | 'PAID';
+export type PaymentStatus = "UNPAID" | "PARTIAL" | "PAID";
 
-export type SaleFormPaymentStatus =
-  | 'UNPAID'
-  | 'PAID';
+export type SaleFormPaymentStatus = "UNPAID" | "PAID";
 
 export type SaleFormValues = {
   customerName: string;
@@ -29,19 +24,24 @@ export type Sale = {
   id: string;
   customerName: string;
   content: string;
+
   totalAmount: number;
   paidAmount: number;
   remainingAmount: number;
+
   paymentStatus: PaymentStatus;
   saleDate: string;
-  note?: string | null;
+  note: string | null;
+
+  pendingDebtPaymentRequestId: string | null;
+
   createdAt: string;
   updatedAt: string;
 };
 
 export type SalesSearchValues = {
   q: string;
-  paymentStatus: '' | PaymentStatus;
+  paymentStatus: "" | PaymentStatus;
   fromDate: string;
   toDate: string;
 };

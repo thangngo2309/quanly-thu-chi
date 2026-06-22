@@ -81,6 +81,13 @@ export class Sale {
   })
   note?: string | null;
 
+  @Column({
+    name: 'pending_debt_payment_request_id',
+    type: 'uuid',
+    nullable: true,
+  })
+  pendingDebtPaymentRequestId: string | null;
+
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamptz',

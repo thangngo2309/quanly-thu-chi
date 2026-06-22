@@ -14,6 +14,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import OpenInNewOutlinedIcon from "@mui/icons-material/OpenInNewOutlined";
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import dayjs from "dayjs";
 import Link from "next/link";
@@ -34,6 +35,8 @@ import { downloadDebtsPdf, getDebts } from "@/api/debts.api";
 import { markSaleAsPaid } from "@/api/sales.api";
 import { HDataTable, HMobileList } from "@/components/datatable";
 import { useToast } from "@/components/toast/ToastProvider";
+import { createPublicDebtLink } from "@/api/public-debts.api";
+import { PendingPaymentRequests } from "./PendingPaymentRequests";
 
 const defaultSearchValues: DebtSearchValues = {
   customerName: "",
@@ -153,6 +156,8 @@ export function DebtsManagement() {
     ...defaultSearchValues,
   });
 
+  const [openingPublicPage, setOpeningPublicPage] = useState(false);
+
   const loadDebts = useCallback(async () => {
     setLoading(true);
 
@@ -254,6 +259,60 @@ export function DebtsManagement() {
       );
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleOpenPublicDebtPage = async (): Promise<void> => {
+    const customerName = filters.customerName.trim();
+
+    if (!customerName) {
+      toast.warning(
+        "Vui lòng chọn đúng khách hàng trước khi mở trang công nợ."
+      );
+
+      return;
+    }
+
+    const popup = window.open("about:blank", "_blank");
+
+    if (popup) {
+      popup.opener = null;
+    }
+
+    setOpeningPublicPage(true);
+
+    try {
+      const result = await createPublicDebtLink({
+        customerName,
+      });
+
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+      const publicUrl = new URL(
+        `${basePath}/public/debts`,
+        window.location.origin
+      );
+
+      publicUrl.searchParams.set("customerName", result.customerName);
+
+      publicUrl.searchParams.set("token", result.token);
+
+      if (popup) {
+        popup.location.href = publicUrl.toString();
+      } else {
+        window.location.href = publicUrl.toString();
+      }
+    } catch (error) {
+      popup?.close();
+
+      toast.error(
+        getApiErrorMessage(
+          error,
+          "Không thể tạo đường dẫn công nợ cho khách hàng."
+        )
+      );
+    } finally {
+      setOpeningPublicPage(false);
     }
   };
 
@@ -367,14 +426,16 @@ export function DebtsManagement() {
         renderCell: ({ row }) => {
           const status = getDebtStatus(row.paymentStatus);
 
-          return (
-            <Chip
-              label={status.label}
-              color={status.color}
-              size="small"
-              variant="outlined"
-            />
-          );
+          if (row.pendingDebtPaymentRequestId) {
+            return (
+              <Chip
+                label="Chờ xác nhận"
+                color="warning"
+                size="small"
+                variant="outlined"
+              />
+            );
+          }
         },
       },
       {
@@ -390,6 +451,7 @@ export function DebtsManagement() {
             size="small"
             variant="outlined"
             color="success"
+            disabled={Boolean( row.pendingDebtPaymentRequestId, )}
             onClick={() => setSaleToMarkPaid(row)}
           >
             Đã thanh toán
@@ -423,6 +485,19 @@ export function DebtsManagement() {
         flexWrap: "wrap",
       }}
     >
+      <Button
+        type="button"
+        variant="outlined"
+        startIcon={<OpenInNewOutlinedIcon />}
+        disabled={openingPublicPage || !filters.customerName.trim()}
+        onClick={() => {
+          void handleOpenPublicDebtPage();
+        }}
+        sx={{ minHeight: 44, whiteSpace: "nowrap" }}
+      >
+        
+        {openingPublicPage ? "Đang mở..." : "Trang của khách hàng"}
+      </Button>
       <ExportExcelDialog />
 
       <Button
@@ -469,6 +544,18 @@ export function DebtsManagement() {
 
   const mobileActions = (
     <>
+      <Button
+        type="button"
+        variant="outlined"
+        disabled={openingPublicPage || !filters.customerName.trim()}
+        onClick={() => {
+          void handleOpenPublicDebtPage();
+        }}
+        sx={{ minHeight: 44, whiteSpace: "nowrap" }}
+      >
+        
+        {openingPublicPage ? "Đang mở..." : "Trang khách hàng"}
+      </Button>
       <ExportExcelDialog fullWidth />
 
       <Button
@@ -546,6 +633,11 @@ export function DebtsManagement() {
         }}
       >
         <Stack spacing={2}>
+          <PendingPaymentRequests
+            onChanged={async () => {
+              await loadDebts();
+            }}
+          />
           <Box
             sx={{
               display: "grid",
@@ -834,9 +926,9 @@ export function DebtsManagement() {
         title="Xác nhận đã thanh toán"
         description={
           <>
-            Xác nhận khoản thu của khách hàng{" "}
+            Xác nhận khoản thu của khách hàng
             <strong>{saleToMarkPaid?.customerName}</strong> đã thanh toán đủ số
-            tiền còn nợ là{" "}
+            tiền còn nợ là
             <strong>{formatVnd(saleToMarkPaid?.remainingAmount ?? 0)}</strong>?
           </>
         }

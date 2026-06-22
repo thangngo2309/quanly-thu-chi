@@ -41,11 +41,9 @@ type ProvidersProps = { children: ReactNode };
 export function Providers({ children }: ProvidersProps) {
   return (
     <ThemeProvider theme={theme}>
-      {" "}
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="vi">
-        {" "}
-        <CssBaseline /> <ToastProvider> {children} </ToastProvider>{" "}
-      </LocalizationProvider>{" "}
+        <CssBaseline /> <ToastProvider> {children} </ToastProvider>
+      </LocalizationProvider>
     </ThemeProvider>
   );
 }

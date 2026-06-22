@@ -672,7 +672,7 @@ export function SalesManagement() {
         title="Xóa khoản thu"
         description={
           <>
-            Bạn có chắc muốn xóa khoản thu của{" "}
+            Bạn có chắc muốn xóa khoản thu của
             <strong>{saleToDelete?.customerName}</strong>? Thao tác này không
             thể hoàn tác.
           </>
@@ -691,8 +691,8 @@ export function SalesManagement() {
         title="Xác nhận đã thu đủ"
         description={
           <>
-            Xác nhận khách hàng <strong>{saleToMarkPaid?.customerName}</strong>{" "}
-            đã thanh toán đủ{" "}
+            Xác nhận khách hàng <strong>{saleToMarkPaid?.customerName}</strong>
+            đã thanh toán đủ
             <strong>{formatVnd(saleToMarkPaid?.totalAmount)}</strong>?
           </>
         }

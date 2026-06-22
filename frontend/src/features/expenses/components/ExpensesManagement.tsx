@@ -520,8 +520,8 @@ export function ExpensesManagement() {
         title="Xóa khoản chi"
         description={
           <>
-            Bạn có chắc muốn xóa khoản chi{" "}
-            <strong>{expenseToDelete?.content}</strong> với số tiền{" "}
+            Bạn có chắc muốn xóa khoản chi
+            <strong>{expenseToDelete?.content}</strong> với số tiền
             <strong>{formatVnd(expenseToDelete?.amount)}</strong>?
           </>
         }

@@ -9,6 +9,7 @@ import PDFDocument = require('pdfkit');
 import { Sale } from '../sales/entities/sale.entity';
 import { DebtsService } from './debts.service';
 import { DebtQueryDto } from './dto/debt-query.dto';
+import { join } from 'node:path';
 
 type PdfColumn = {
   key: 'index' | 'date' | 'customer' | 'content' | 'total' | 'paid' | 'debt';
@@ -104,24 +105,39 @@ export class DebtsPdfService {
       totalDebt: number;
     },
   ): void {
+    const logoPath = join(process.cwd(), 'assets', 'logo-bep-chieu.png');
+
+    const titleStartX = 110;
+
+    if (existsSync(logoPath)) {
+      document.image(logoPath, 36, 26, {
+        fit: [64, 64],
+        align: 'center',
+        valign: 'center',
+      });
+    }
     document
       .font('Bold')
-      .fontSize(18)
+      .fontSize(17)
       .fillColor('#1f2937')
-      .text('BẢNG ĐỐI CHIẾU CÔNG NỢ', {
+      .text('BẢNG ĐỐI CHIẾU CÔNG NỢ', titleStartX, 34, {
+        width: document.page.width - titleStartX - 36,
+
         align: 'center',
       });
-
-    document.moveDown(0.35);
 
     document
       .font('Bold')
-      .fontSize(13)
+      .fontSize(12)
       .fillColor('#2563eb')
-      .text(query.customerName?.trim() ?? '', {
+      .text(query.customerName?.trim() ?? '', titleStartX, 58, {
+        width: document.page.width - titleStartX - 36,
+
         align: 'center',
       });
 
+    document.y = 104;
+    
     document.moveDown(0.5);
 
     document

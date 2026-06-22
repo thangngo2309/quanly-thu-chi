@@ -68,34 +68,34 @@ export function DashboardDateFilter({
   };
   return (
     <Card variant="outlined" sx={{ borderRadius: 3 }}>
-      {" "}
+      
       <CardContent
         sx={{
           p: { xs: 2, md: 2.5 },
           "&:last-child": { pb: { xs: 2, md: 2.5 } },
         }}
       >
-        {" "}
+        
         <Stack spacing={2}>
-          {" "}
+          
           <Box>
-            {" "}
+            
             <Typography
               variant="h6"
               sx={{ fontWeight: 900, fontSize: { xs: 18, md: 20 } }}
             >
-              {" "}
-              Lọc báo cáo theo thời gian{" "}
-            </Typography>{" "}
+              
+              Lọc báo cáo theo thời gian
+            </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {" "}
-              Chọn khoảng ngày để xem doanh thu, công nợ, chi phí và lợi nhuận.{" "}
-            </Typography>{" "}
-          </Box>{" "}
+              
+              Chọn khoảng ngày để xem doanh thu, công nợ, chi phí và lợi nhuận.
+            </Typography>
+          </Box>
           <HForm methods={methods} onSubmit={handleSubmit}>
-            {" "}
+            
             <Stack spacing={1.5}>
-              {" "}
+              
               <Box
                 sx={{
                   display: "grid",
@@ -108,27 +108,27 @@ export function DashboardDateFilter({
                   alignItems: "start",
                 }}
               >
-                {" "}
+                
                 <HDatePicker<DashboardFilterValues>
                   name="fromDate"
                   label="Từ ngày"
-                />{" "}
+                />
                 <HDatePicker<DashboardFilterValues>
                   name="toDate"
                   label="Đến ngày"
-                />{" "}
+                />
                 <Button
                   type="submit"
                   variant="contained"
                   disabled={loading}
                   sx={{ minHeight: 56, px: 3, whiteSpace: "nowrap" }}
                 >
-                  {" "}
-                  {loading ? "Đang tải..." : "Xem báo cáo"}{" "}
-                </Button>{" "}
-              </Box>{" "}
-            </Stack>{" "}
-          </HForm>{" "}
+                  
+                  {loading ? "Đang tải..." : "Xem báo cáo"}
+                </Button>
+              </Box>
+            </Stack>
+          </HForm>
           <Box
             sx={{
               display: "grid",
@@ -140,7 +140,7 @@ export function DashboardDateFilter({
               justifyContent: { xs: "stretch", sm: "flex-start" },
             }}
           >
-            {" "}
+            
             <Button
               type="button"
               variant="outlined"
@@ -148,9 +148,9 @@ export function DashboardDateFilter({
               onClick={handleToday}
               sx={{ minHeight: 42 }}
             >
-              {" "}
-              Hôm nay{" "}
-            </Button>{" "}
+              
+              Hôm nay
+            </Button>
             <Button
               type="button"
               variant="outlined"
@@ -158,9 +158,9 @@ export function DashboardDateFilter({
               onClick={handleCurrentMonth}
               sx={{ minHeight: 42 }}
             >
-              {" "}
-              Tháng này{" "}
-            </Button>{" "}
+              
+              Tháng này
+            </Button>
             <Button
               type="button"
               variant="outlined"
@@ -168,9 +168,9 @@ export function DashboardDateFilter({
               onClick={handleCurrentYear}
               sx={{ minHeight: 42 }}
             >
-              {" "}
-              Năm nay{" "}
-            </Button>{" "}
+              
+              Năm nay
+            </Button>
             <Button
               type="button"
               variant="outlined"
@@ -179,12 +179,12 @@ export function DashboardDateFilter({
               onClick={handleAllTime}
               sx={{ minHeight: 42 }}
             >
-              {" "}
-              Toàn bộ{" "}
-            </Button>{" "}
-          </Box>{" "}
-        </Stack>{" "}
-      </CardContent>{" "}
+              
+              Toàn bộ
+            </Button>
+          </Box>
+        </Stack>
+      </CardContent>
     </Card>
   );
 }

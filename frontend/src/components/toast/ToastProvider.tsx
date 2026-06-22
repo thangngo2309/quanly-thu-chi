@@ -101,8 +101,7 @@ export function ToastProvider({ children }: ToastProviderProps) {
   );
   return (
     <ToastContext.Provider value={value}>
-      {" "}
-      {children}{" "}
+      {children}
       <Snackbar
         key={currentToast?.id ?? 0}
         open={open}
