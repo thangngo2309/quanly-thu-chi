@@ -28,24 +28,22 @@ import type {
   DashboardSummary,
 } from "../types/dashboard.types";
 import { getDashboardSummary } from "@/api/dashboard.api";
-import { ExportExcelDialog } from "@/features/reports/components/ExportExcelDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DashboardDateFilter } from "./DashboardDateFilter";
+import { TopDebtorsCard } from "./TopDebtorsCard";
 
 const emptySummary: DashboardSummary = {
   fromDate: null,
   toDate: null,
-
   totalRevenue: 0,
   totalCollected: 0,
   totalDebt: 0,
   totalExpenses: 0,
-
   estimatedProfit: 0,
   cashBalance: 0,
-
   totalSales: 0,
   totalExpenseItems: 0,
+  topDebtors: [],
 };
 
 const defaultFilterValues: DashboardFilterValues = {
@@ -411,14 +409,15 @@ export function DashboardOverview() {
               setFilters(values);
             }}
           />
+
+          <TopDebtorsCard items={summary.topDebtors ?? []} />
+
           <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-            
             Dữ liệu đang hiển thị:
             <Box
               component="span"
               sx={{ fontWeight: 800, color: "text.primary" }}
             >
-              
               {selectedDateLabel}
             </Box>
           </Typography>
