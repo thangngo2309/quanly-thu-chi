@@ -31,6 +31,8 @@ import { deleteExpense, getExpenses } from "@/api/expenses.api";
 import { HDataTable, HMobileList } from "@/components/datatable";
 import { ExportExcelDialog } from "@/features/reports/components/ExportExcelDialog";
 import { useToast } from "@/components/toast/ToastProvider";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import { ExpenseEditDialog } from "./ExpenseEditDialog";
 
 const expenseCategoryOptions = [
   {
@@ -79,6 +81,8 @@ export function ExpensesManagement() {
   const [loading, setLoading] = useState(false);
 
   const [actionLoading, setActionLoading] = useState(false);
+
+  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
 
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
 
@@ -256,18 +260,36 @@ export function ExpensesManagement() {
       {
         field: "actions",
         headerName: "Thao tác",
-        width: 100,
+        width: 190,
         sortable: false,
         filterable: false,
+
         renderCell: ({ row }) => (
-          <Button
-            size="small"
-            variant="outlined"
-            color="error"
-            onClick={() => setExpenseToDelete(row)}
-          >
-            Xóa
-          </Button>
+          <Stack direction="row" spacing={0.75}>
+            <Button
+              type="button"
+              size="small"
+              variant="outlined"
+              startIcon={<EditOutlinedIcon />}
+              onClick={() => {
+                setExpenseToEdit(row);
+              }}
+            >
+              Sửa
+            </Button>
+
+            <Button
+              type="button"
+              size="small"
+              variant="outlined"
+              color="error"
+              onClick={() => {
+                setExpenseToDelete(row);
+              }}
+            >
+              Xóa
+            </Button>
+          </Stack>
         ),
       },
     ],
@@ -468,18 +490,35 @@ export function ExpensesManagement() {
                             </Typography>
                           )}
 
-                          <Button
-                            type="button"
-                            variant="outlined"
-                            color="error"
-                            fullWidth
-                            onClick={() => setExpenseToDelete(expense)}
-                            sx={{
-                              minHeight: 44,
-                            }}
-                          >
-                            Xóa khoản chi
-                          </Button>
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              type="button"
+                              variant="outlined"
+                              startIcon={<EditOutlinedIcon />}
+                              fullWidth
+                              onClick={() => {
+                                setExpenseToEdit(expense);
+                              }}
+                              sx={{
+                                minHeight: 44,
+                              }}
+                            >
+                              Chỉnh sửa
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="outlined"
+                              color="error"
+                              fullWidth
+                              onClick={() => setExpenseToDelete(expense)}
+                              sx={{
+                                minHeight: 44,
+                              }}
+                            >
+                              Xóa khoản chi
+                            </Button>
+                          </Stack>
                         </Stack>
                       </CardContent>
                     </Card>
@@ -514,6 +553,19 @@ export function ExpensesManagement() {
           )}
         </Stack>
       </Container>
+
+      <ExpenseEditDialog
+        open={Boolean(expenseToEdit)}
+        expense={expenseToEdit}
+        onClose={() => {
+          setExpenseToEdit(null);
+        }}
+        onSaved={async () => {
+          setExpenseToEdit(null);
+
+          await loadExpenses();
+        }}
+      />
 
       <HConfirmDialog
         open={Boolean(expenseToDelete)}

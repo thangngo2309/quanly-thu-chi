@@ -40,3 +40,11 @@ export type ExpensesQueryParams = {
   fromDate?: string;
   toDate?: string;
 };
+
+export type UpdateExpensePayload = {
+  content?: string;
+  category?: string | null;
+  amount?: number;
+  expenseDate?: string;
+  note?: string | null;
+};

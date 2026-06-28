@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { PaymentStatus } from '../common/enums/payment-status.enum';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -19,6 +19,8 @@ export class SalesService {
   constructor(
     @InjectRepository(Sale)
     private readonly saleRepository: Repository<Sale>,
+    private readonly dataSource:DataSource,
+
   ) {}
 
   async create(createSaleDto: CreateSaleDto): Promise<Sale> {
@@ -112,35 +114,70 @@ export class SalesService {
   }
 
   async update(id: string, updateSaleDto: UpdateSaleDto): Promise<Sale> {
-    const sale = await this.findOne(id);
+    return this.dataSource.transaction(async (manager) => {
+      const saleRepository = manager.getRepository(Sale);
 
-    if (sale.pendingDebtPaymentRequestId) {
-      throw new ConflictException('Khoản thu đang chờ xác nhận thanh toán');
-    }
+      const sale = await saleRepository
+        .createQueryBuilder('sale')
+        .setLock('pessimistic_write')
+        .where('sale.id = :id', {
+          id,
+        })
+        .getOne();
 
-    const totalAmount = Number(updateSaleDto.totalAmount ?? sale.totalAmount);
+      if (!sale) {
+        throw new NotFoundException('Không tìm thấy khoản thu');
+      }
 
-    const paidAmount = Number(updateSaleDto.paidAmount ?? sale.paidAmount);
+      if (sale.pendingDebtPaymentRequestId) {
+        throw new ConflictException('Khoản thu đang chờ xác nhận thanh toán');
+      }
 
-    this.validateAmounts(totalAmount, paidAmount);
+      const totalAmount = Number(updateSaleDto.totalAmount ?? sale.totalAmount);
 
-    sale.customerName = updateSaleDto.customerName?.trim() ?? sale.customerName;
+      const paidAmount = Number(updateSaleDto.paidAmount ?? sale.paidAmount);
 
-    sale.content = updateSaleDto.content?.trim() ?? sale.content;
+      this.validateAmounts(totalAmount, paidAmount);
 
-    sale.totalAmount = totalAmount;
-    sale.paidAmount = paidAmount;
-    sale.remainingAmount = totalAmount - paidAmount;
+      if (updateSaleDto.customerName !== undefined) {
+        const customerName = updateSaleDto.customerName.trim();
 
-    sale.paymentStatus = this.resolvePaymentStatus(totalAmount, paidAmount);
+        if (!customerName) {
+          throw new BadRequestException('Tên khách hàng không được để trống');
+        }
 
-    sale.saleDate = updateSaleDto.saleDate ?? sale.saleDate;
+        sale.customerName = customerName;
+      }
 
-    if (updateSaleDto.note !== undefined) {
-      sale.note = updateSaleDto.note?.trim() || null;
-    }
+      if (updateSaleDto.content !== undefined) {
+        const content = updateSaleDto.content.trim();
 
-    return this.saleRepository.save(sale);
+        if (!content) {
+          throw new BadRequestException(
+            'Nội dung khoản thu không được để trống',
+          );
+        }
+
+        sale.content = content;
+      }
+
+      sale.totalAmount = totalAmount;
+      sale.paidAmount = paidAmount;
+
+      sale.remainingAmount = totalAmount - paidAmount;
+
+      sale.paymentStatus = this.resolvePaymentStatus(totalAmount, paidAmount);
+
+      if (updateSaleDto.saleDate !== undefined) {
+        sale.saleDate = updateSaleDto.saleDate;
+      }
+
+      if (updateSaleDto.note !== undefined) {
+        sale.note = updateSaleDto.note?.trim() || null;
+      }
+
+      return saleRepository.save(sale);
+    });
   }
 
   async remove(id: string): Promise<void> {

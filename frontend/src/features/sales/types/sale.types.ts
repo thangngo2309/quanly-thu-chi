@@ -54,3 +54,12 @@ export type SalesQueryParams = {
   fromDate?: string;
   toDate?: string;
 };
+
+export type UpdateSalePayload = {
+  customerName?: string;
+  content?: string;
+  totalAmount?: number;
+  paidAmount?: number;
+  saleDate?: string;
+  note?: string | null;
+};

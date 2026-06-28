@@ -33,6 +33,8 @@ import { HDataTable, HMobileList } from "@/components/datatable";
 import { deleteSale, getSales, markSaleAsPaid } from "@/api/sales.api";
 import { ExportExcelDialog } from "@/features/reports/components/ExportExcelDialog";
 import { useToast } from "@/components/toast/ToastProvider";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import { SaleEditDialog } from "./SaleEditDialog";
 
 const defaultSearchValues: SalesSearchValues = {
   q: "",
@@ -92,6 +94,8 @@ export function SalesManagement() {
   const [loading, setLoading] = useState(false);
 
   const [actionLoading, setActionLoading] = useState(false);
+
+  const [saleToEdit, setSaleToEdit] = useState<Sale | null>(null);
 
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
 
@@ -310,7 +314,7 @@ export function SalesManagement() {
       {
         field: "actions",
         headerName: "Thao tác",
-        width: 190,
+        width: 275,
         sortable: false,
         filterable: false,
         renderCell: ({ row }) => (
@@ -325,6 +329,16 @@ export function SalesManagement() {
                 Thu đủ
               </Button>
             )}
+
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<EditOutlinedIcon />}
+              disabled={Boolean(row.pendingDebtPaymentRequestId)}
+              onClick={() => setSaleToEdit(row)}
+            >
+              Sửa
+            </Button>
 
             <Button
               size="small"
@@ -621,6 +635,22 @@ export function SalesManagement() {
                               <Button
                                 type="button"
                                 variant="outlined"
+                                startIcon={<EditOutlinedIcon />}
+                                fullWidth
+                                disabled={Boolean(
+                                  sale.pendingDebtPaymentRequestId
+                                )}
+                                onClick={() => setSaleToEdit(sale)}
+                                sx={{
+                                  minHeight: 44,
+                                }}
+                              >
+                                Chỉnh sửa khoản thu
+                              </Button>
+
+                              <Button
+                                type="button"
+                                variant="outlined"
                                 color="error"
                                 fullWidth
                                 onClick={() => setSaleToDelete(sale)}
@@ -683,6 +713,18 @@ export function SalesManagement() {
         onClose={() => setSaleToDelete(null)}
         onConfirm={() => {
           void handleDelete();
+        }}
+      />
+
+      <SaleEditDialog
+        open={Boolean(saleToEdit)}
+        sale={saleToEdit}
+        onClose={() => {
+          setSaleToEdit(null);
+        }}
+        onSaved={async () => {
+          setSaleToEdit(null);
+          await loadSales();
         }}
       />
 

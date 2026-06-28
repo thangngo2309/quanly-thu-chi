@@ -1,4 +1,4 @@
-import { CreateSalePayload, Sale, SalesQueryParams } from '@/features/sales/types/sale.types';
+import { CreateSalePayload, Sale, SalesQueryParams, UpdateSalePayload } from '@/features/sales/types/sale.types';
 import type { PaginatedResponse } from '@/types/pagination';
 import { api } from './http';
 
@@ -58,6 +58,19 @@ export async function getCustomerSuggestions(
       limit,
     },
   });
+
+  return response.data;
+}
+
+export async function updateSale(
+  id: string,
+  payload: UpdateSalePayload,
+): Promise<Sale> {
+  const response =
+    await api.patch<Sale>(
+      `/sales/${id}`,
+      payload,
+    );
 
   return response.data;
 }

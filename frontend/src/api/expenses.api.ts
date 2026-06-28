@@ -1,4 +1,4 @@
-import { CreateExpensePayload, Expense, ExpensesQueryParams } from '@/features/expenses/types/expense.types';
+import { CreateExpensePayload, Expense, ExpensesQueryParams, UpdateExpensePayload } from '@/features/expenses/types/expense.types';
 import type { PaginatedResponse } from '@/types/pagination';
 import { api } from './http';
 
@@ -30,4 +30,16 @@ export async function deleteExpense(
   id: string,
 ): Promise<void> {
   await api.delete(`/expenses/${id}`);
+}
+
+export async function updateExpense(
+  id: string,
+  payload: UpdateExpensePayload
+): Promise<Expense> {
+  const response = await api.patch<Expense>(
+    `/expenses/${id}`,
+    payload
+  );
+
+  return response.data;
 }
