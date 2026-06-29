@@ -80,4 +80,15 @@ export class SalesController {
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.salesService.remove(id);
   }
+
+  @Patch(':id/mark-delivered')
+  @ApiOperation({
+    summary: 'Đánh dấu khoản thu đã giao hàng',
+  })
+  markAsDelivered(
+    @Param('id')
+    id: string,
+  ) {
+    return this.salesService.markAsDelivered(id);
+  }
 }

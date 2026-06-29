@@ -14,13 +14,19 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect } from "react";
-import { Controller, type SubmitHandler, useForm } from "react-hook-form";
+import {
+  Controller,
+  type SubmitHandler,
+  useForm,
+  FormProvider,
+} from "react-hook-form";
 
 import { updateSale } from "@/api/sales.api";
 import { useToast } from "@/components/toast/ToastProvider";
 import { getApiErrorMessage } from "@/utils/api-error";
 import { formatVnd } from "@/utils/currency";
 import type { Sale } from "../types/sale.types";
+import { HDatePicker } from "@/components/form";
 
 type SaleEditFormValues = {
   customerName: string;
@@ -28,6 +34,7 @@ type SaleEditFormValues = {
   totalAmount: string;
   paidAmount: string;
   saleDate: string;
+  deliveryAt: string;
   note: string;
 };
 
@@ -56,24 +63,29 @@ export function SaleEditDialog({
 }: SaleEditDialogProps) {
   const toast = useToast();
 
-  const {
-    control,
-    handleSubmit,
-    reset,
-    watch,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<SaleEditFormValues>({
+  const methods = useForm<SaleEditFormValues>({
     mode: "all",
+
     defaultValues: {
       customerName: "",
       content: "",
       totalAmount: "",
       paidAmount: "",
       saleDate: "",
+      deliveryAt: "",
       note: "",
     },
   });
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    setError,
+
+    formState: { errors, isSubmitting },
+  } = methods;
 
   useEffect(() => {
     if (!open || !sale) {
@@ -86,6 +98,7 @@ export function SaleEditDialog({
       totalAmount: String(Number(sale.totalAmount ?? 0)),
       paidAmount: String(Number(sale.paidAmount ?? 0)),
       saleDate: sale.saleDate?.slice(0, 10) ?? "",
+      deliveryAt: sale.deliveryAt ?? "",
       note: sale.note ?? "",
     });
   }, [open, sale, reset]);
@@ -156,6 +169,7 @@ export function SaleEditDialog({
         totalAmount: normalizedTotalAmount,
         paidAmount: normalizedPaidAmount,
         saleDate: values.saleDate,
+        deliveryAt: values.deliveryAt || null,
         note: values.note.trim() || null,
       });
 
@@ -197,289 +211,301 @@ export function SaleEditDialog({
         },
       }}
     >
-      <Box component="form" noValidate onSubmit={handleSubmit(submitForm)}>
-        <DialogTitle
-          sx={{
-            fontWeight: 900,
-          }}
-        >
-          Chỉnh sửa khoản thu
-        </DialogTitle>
-
-        <DialogContent>
-          <Stack
-            spacing={2}
+      <FormProvider {...methods}>
+        <Box component="form" noValidate onSubmit={handleSubmit(submitForm)}>
+          <DialogTitle
             sx={{
-              pt: 1,
+              fontWeight: 900,
             }}
           >
-            {isPendingConfirmation && (
-              <Alert severity="warning">
-                Khoản thu đang chờ xác nhận thanh toán nên chưa thể chỉnh sửa.
-              </Alert>
-            )}
+            Chỉnh sửa khoản thu
+          </DialogTitle>
 
-            <Controller
-              name="customerName"
-              control={control}
-              rules={{
-                required: "Vui lòng nhập tên khách hàng",
-                validate: (value) =>
-                  value.trim().length > 0 || "Vui lòng nhập tên khách hàng",
-              }}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Tên khách hàng"
-                  fullWidth
-                  disabled={isPendingConfirmation}
-                  error={Boolean(errors.customerName)}
-                  helperText={errors.customerName?.message}
-                />
-              )}
-            />
-
-            <Controller
-              name="saleDate"
-              control={control}
-              rules={{
-                required: "Vui lòng chọn ngày phát sinh",
-              }}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Ngày phát sinh"
-                  type="date"
-                  fullWidth
-                  disabled={isPendingConfirmation}
-                  error={Boolean(errors.saleDate)}
-                  helperText={errors.saleDate?.message}
-                  slotProps={{
-                    inputLabel: {
-                      shrink: true,
-                    },
-                  }}
-                />
-              )}
-            />
-
-            <Controller
-              name="content"
-              control={control}
-              rules={{
-                required: "Vui lòng nhập nội dung khoản thu",
-                validate: (value) =>
-                  value.trim().length > 0 || "Vui lòng nhập nội dung khoản thu",
-              }}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Nội dung khoản thu"
-                  multiline
-                  minRows={2}
-                  fullWidth
-                  disabled={isPendingConfirmation}
-                  error={Boolean(errors.content)}
-                  helperText={errors.content?.message}
-                />
-              )}
-            />
-
-            <Controller
-              name="totalAmount"
-              control={control}
-              rules={{
-                required: "Vui lòng nhập tổng tiền",
-                validate: (value) =>
-                  parseAmount(value) > 0 || "Tổng tiền phải lớn hơn 0",
-              }}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ""}
-                  label="Tổng tiền"
-                  placeholder="0"
-                  fullWidth
-                  disabled={isPendingConfirmation}
-                  error={Boolean(errors.totalAmount)}
-                  helperText={errors.totalAmount?.message}
-                  onChange={(event) => {
-                    field.onChange(normalizeAmountInput(event.target.value));
-                  }}
-                  slotProps={{
-                    htmlInput: {
-                      inputMode: "numeric",
-                    },
-                  }}
-                />
-              )}
-            />
-
-            <Controller
-              name="paidAmount"
-              control={control}
-              rules={{
-                validate: (value) => {
-                  const currentPaidAmount = parseAmount(value);
-
-                  const currentTotalAmount = parseAmount(
-                    watch("totalAmount") ?? ""
-                  );
-
-                  return (
-                    currentPaidAmount <= currentTotalAmount ||
-                    "Số tiền đã thu không được lớn hơn tổng tiền"
-                  );
-                },
-              }}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ""}
-                  label="Số tiền đã thu"
-                  placeholder="0"
-                  fullWidth
-                  disabled={isPendingConfirmation}
-                  error={Boolean(errors.paidAmount)}
-                  helperText={errors.paidAmount?.message}
-                  onChange={(event) => {
-                    field.onChange(normalizeAmountInput(event.target.value));
-                  }}
-                  slotProps={{
-                    htmlInput: {
-                      inputMode: "numeric",
-                    },
-                  }}
-                />
-              )}
-            />
-
-            <Box
+          <DialogContent>
+            <Stack
+              spacing={2}
               sx={{
-                p: 2,
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: 2.5,
-                backgroundColor: "background.default",
+                pt: 1,
               }}
             >
-              <Stack spacing={1}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 2,
-                  }}
-                >
-                  <Typography color="text.secondary">Tổng tiền</Typography>
-
-                  <Typography sx={{ fontWeight: 800 }}>
-                    {formatVnd(totalAmount)}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 2,
-                  }}
-                >
-                  <Typography color="text.secondary">Đã thu</Typography>
-
-                  <Typography
-                    sx={{
-                      color: "success.main",
-                      fontWeight: 800,
-                    }}
-                  >
-                    {formatVnd(paidAmount)}
-                  </Typography>
-                </Box>
-
-                <Divider />
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 2,
-                  }}
-                >
-                  <Typography color="text.secondary">Còn nợ</Typography>
-
-                  <Typography
-                    sx={{
-                      color:
-                        remainingAmount > 0 ? "error.main" : "success.main",
-                      fontWeight: 900,
-                    }}
-                  >
-                    {formatVnd(remainingAmount)}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-
-            <Controller
-              name="note"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Ghi chú"
-                  multiline
-                  minRows={2}
-                  fullWidth
-                  disabled={isPendingConfirmation}
-                />
+              {isPendingConfirmation && (
+                <Alert severity="warning">
+                  Khoản thu đang chờ xác nhận thanh toán nên chưa thể chỉnh sửa.
+                </Alert>
               )}
-            />
-          </Stack>
-        </DialogContent>
 
-        <DialogActions
-          sx={{
-            px: 3,
-            pb: 2.5,
-            gap: 1,
-            flexDirection: {
-              xs: "column-reverse",
-              sm: "row",
-            },
-            "& .MuiButton-root": {
-              width: {
-                xs: "100%",
-                sm: "auto",
-              },
-              minHeight: 44,
-            },
-            "& .MuiButton-root + .MuiButton-root": {
-              ml: {
-                xs: 0,
-                sm: 1,
-              },
-            },
-          }}
-        >
-          <Button
-            type="button"
-            variant="outlined"
-            disabled={isSubmitting}
-            onClick={handleClose}
-          >
-            Hủy
-          </Button>
+              <Controller
+                name="customerName"
+                control={control}
+                rules={{
+                  required: "Vui lòng nhập tên khách hàng",
+                  validate: (value) =>
+                    value.trim().length > 0 || "Vui lòng nhập tên khách hàng",
+                }}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Tên khách hàng"
+                    fullWidth
+                    disabled={isPendingConfirmation}
+                    error={Boolean(errors.customerName)}
+                    helperText={errors.customerName?.message}
+                  />
+                )}
+              />
 
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={isSubmitting || isPendingConfirmation}
+              <Controller
+                name="saleDate"
+                control={control}
+                rules={{
+                  required: "Vui lòng chọn ngày phát sinh",
+                }}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Ngày phát sinh"
+                    type="date"
+                    fullWidth
+                    disabled={isPendingConfirmation}
+                    error={Boolean(errors.saleDate)}
+                    helperText={errors.saleDate?.message}
+                    slotProps={{
+                      inputLabel: {
+                        shrink: true,
+                      },
+                    }}
+                  />
+                )}
+              />
+
+              <HDatePicker<SaleEditFormValues>
+                name="deliveryAt"
+                label="Ngày giờ giao hàng"
+                mode="datetime"
+                valueFormat="iso"
+                minutesStep={5}
+                disabled={isPendingConfirmation}
+              />
+
+              <Controller
+                name="content"
+                control={control}
+                rules={{
+                  required: "Vui lòng nhập nội dung khoản thu",
+                  validate: (value) =>
+                    value.trim().length > 0 ||
+                    "Vui lòng nhập nội dung khoản thu",
+                }}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Nội dung khoản thu"
+                    multiline
+                    minRows={2}
+                    fullWidth
+                    disabled={isPendingConfirmation}
+                    error={Boolean(errors.content)}
+                    helperText={errors.content?.message}
+                  />
+                )}
+              />
+
+              <Controller
+                name="totalAmount"
+                control={control}
+                rules={{
+                  required: "Vui lòng nhập tổng tiền",
+                  validate: (value) =>
+                    parseAmount(value) > 0 || "Tổng tiền phải lớn hơn 0",
+                }}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    value={field.value ?? ""}
+                    label="Tổng tiền"
+                    placeholder="0"
+                    fullWidth
+                    disabled={isPendingConfirmation}
+                    error={Boolean(errors.totalAmount)}
+                    helperText={errors.totalAmount?.message}
+                    onChange={(event) => {
+                      field.onChange(normalizeAmountInput(event.target.value));
+                    }}
+                    slotProps={{
+                      htmlInput: {
+                        inputMode: "numeric",
+                      },
+                    }}
+                  />
+                )}
+              />
+
+              <Controller
+                name="paidAmount"
+                control={control}
+                rules={{
+                  validate: (value) => {
+                    const currentPaidAmount = parseAmount(value);
+
+                    const currentTotalAmount = parseAmount(
+                      watch("totalAmount") ?? ""
+                    );
+
+                    return (
+                      currentPaidAmount <= currentTotalAmount ||
+                      "Số tiền đã thu không được lớn hơn tổng tiền"
+                    );
+                  },
+                }}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    value={field.value ?? ""}
+                    label="Số tiền đã thu"
+                    placeholder="0"
+                    fullWidth
+                    disabled={isPendingConfirmation}
+                    error={Boolean(errors.paidAmount)}
+                    helperText={errors.paidAmount?.message}
+                    onChange={(event) => {
+                      field.onChange(normalizeAmountInput(event.target.value));
+                    }}
+                    slotProps={{
+                      htmlInput: {
+                        inputMode: "numeric",
+                      },
+                    }}
+                  />
+                )}
+              />
+
+              <Box
+                sx={{
+                  p: 2,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 2.5,
+                  backgroundColor: "background.default",
+                }}
+              >
+                <Stack spacing={1}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 2,
+                    }}
+                  >
+                    <Typography color="text.secondary">Tổng tiền</Typography>
+
+                    <Typography sx={{ fontWeight: 800 }}>
+                      {formatVnd(totalAmount)}
+                    </Typography>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 2,
+                    }}
+                  >
+                    <Typography color="text.secondary">Đã thu</Typography>
+
+                    <Typography
+                      sx={{
+                        color: "success.main",
+                        fontWeight: 800,
+                      }}
+                    >
+                      {formatVnd(paidAmount)}
+                    </Typography>
+                  </Box>
+
+                  <Divider />
+
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 2,
+                    }}
+                  >
+                    <Typography color="text.secondary">Còn nợ</Typography>
+
+                    <Typography
+                      sx={{
+                        color:
+                          remainingAmount > 0 ? "error.main" : "success.main",
+                        fontWeight: 900,
+                      }}
+                    >
+                      {formatVnd(remainingAmount)}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
+
+              <Controller
+                name="note"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Ghi chú"
+                    multiline
+                    minRows={2}
+                    fullWidth
+                    disabled={isPendingConfirmation}
+                  />
+                )}
+              />
+            </Stack>
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 3,
+              pb: 2.5,
+              gap: 1,
+              flexDirection: {
+                xs: "column-reverse",
+                sm: "row",
+              },
+              "& .MuiButton-root": {
+                width: {
+                  xs: "100%",
+                  sm: "auto",
+                },
+                minHeight: 44,
+              },
+              "& .MuiButton-root + .MuiButton-root": {
+                ml: {
+                  xs: 0,
+                  sm: 1,
+                },
+              },
+            }}
           >
-            {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
-          </Button>
-        </DialogActions>
-      </Box>
+            <Button
+              type="button"
+              variant="outlined"
+              disabled={isSubmitting}
+              onClick={handleClose}
+            >
+              Hủy
+            </Button>
+
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={isSubmitting || isPendingConfirmation}
+            >
+              {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
+            </Button>
+          </DialogActions>
+        </Box>
+      </FormProvider>
     </Dialog>
   );
 }

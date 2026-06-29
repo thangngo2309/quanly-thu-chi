@@ -33,6 +33,7 @@ const defaultValues: SaleFormValues = {
   totalAmount: "",
   paymentStatus: "UNPAID",
   saleDate: "",
+  deliveryAt: "",
   note: "",
 };
 
@@ -113,6 +114,8 @@ export function SaleCreateForm() {
         totalAmount: normalizedTotalAmount,
         paidAmount: values.paymentStatus === "PAID" ? normalizedTotalAmount : 0,
         saleDate: values.saleDate,
+        deliveryAt: values.deliveryAt || undefined,
+
         note: values.note.trim() || undefined,
       });
 
@@ -276,6 +279,14 @@ export function SaleCreateForm() {
                 />
               </Paper>
             </Box>
+
+            <HDatePicker<SaleFormValues>
+              name="deliveryAt"
+              label="Ngày giờ giao hàng"
+              mode="datetime"
+              valueFormat="iso"
+              minutesStep={5}
+            />
 
             <HInput<SaleFormValues>
               name="note"

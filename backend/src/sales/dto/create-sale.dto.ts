@@ -61,4 +61,12 @@ export class CreateSaleDto {
   @IsOptional()
   @IsString()
   note?: string;
+  
+  @ApiPropertyOptional({
+    example: "2026-06-30T10:30:00+07:00",
+    description: "Ngày giờ dự kiến giao hàng",
+  })
+  @IsOptional()
+  @IsDateString()
+  deliveryAt?: string;
 }

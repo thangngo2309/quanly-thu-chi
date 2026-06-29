@@ -19,8 +19,7 @@ export class SalesService {
   constructor(
     @InjectRepository(Sale)
     private readonly saleRepository: Repository<Sale>,
-    private readonly dataSource:DataSource,
-
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(createSaleDto: CreateSaleDto): Promise<Sale> {
@@ -38,6 +37,10 @@ export class SalesService {
       paymentStatus: this.resolvePaymentStatus(totalAmount, paidAmount),
       saleDate: createSaleDto.saleDate ?? new Date().toISOString().slice(0, 10),
       note: createSaleDto.note?.trim() || null,
+      deliveryAt: createSaleDto.deliveryAt
+        ? new Date(createSaleDto.deliveryAt)
+        : null,
+      isDelivered: false,
     });
 
     return this.saleRepository.save(sale);
@@ -81,7 +84,7 @@ export class SalesService {
     }
 
     queryBuilder
-      .orderBy('sale.saleDate', 'DESC')
+      .orderBy('sale.deliveryAt', 'ASC', 'NULLS LAST')
       .addOrderBy('sale.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -176,6 +179,12 @@ export class SalesService {
         sale.note = updateSaleDto.note?.trim() || null;
       }
 
+      if (updateSaleDto.deliveryAt !== undefined) {
+        sale.deliveryAt = updateSaleDto.deliveryAt
+          ? new Date(updateSaleDto.deliveryAt)
+          : null;
+      }
+
       return saleRepository.save(sale);
     });
   }
@@ -257,5 +266,17 @@ export class SalesService {
     }
 
     return Array.from(uniqueCustomers.values()).slice(0, limit);
+  }
+
+  async markAsDelivered(id: string): Promise<Sale> {
+    const sale = await this.findOne(id);
+
+    if (sale.isDelivered) {
+      return sale;
+    }
+
+    sale.isDelivered = true;
+
+    return this.saleRepository.save(sale);
   }
 }

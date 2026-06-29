@@ -23,18 +23,24 @@ import { HDatePicker, HDropdown, HInput } from "@/components/form";
 import { useResponsiveMode } from "@/hooks/use-responsive-mode";
 import { getApiErrorMessage } from "@/utils/api-error";
 import { formatVnd } from "@/utils/currency";
-import { formatDateVi } from "@/utils/date";
+import { formatDateTime, formatDateVi } from "@/utils/date";
 import type {
   PaymentStatus,
   Sale,
   SalesSearchValues,
 } from "../types/sale.types";
 import { HDataTable, HMobileList } from "@/components/datatable";
-import { deleteSale, getSales, markSaleAsPaid } from "@/api/sales.api";
+import {
+  deleteSale,
+  getSales,
+  markSaleAsDelivered,
+  markSaleAsPaid,
+} from "@/api/sales.api";
 import { ExportExcelDialog } from "@/features/reports/components/ExportExcelDialog";
 import { useToast } from "@/components/toast/ToastProvider";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { SaleEditDialog } from "./SaleEditDialog";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 
 const defaultSearchValues: SalesSearchValues = {
   q: "",
@@ -100,6 +106,10 @@ export function SalesManagement() {
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
 
   const [saleToMarkPaid, setSaleToMarkPaid] = useState<Sale | null>(null);
+
+  const [saleToMarkDelivered, setSaleToMarkDelivered] = useState<Sale | null>(
+    null
+  );
 
   const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
     page: 0,
@@ -229,6 +239,30 @@ export function SalesManagement() {
     }
   };
 
+  const handleMarkSaleAsDelivered = async (): Promise<void> => {
+    if (!saleToMarkDelivered) {
+      return;
+    }
+
+    setActionLoading(true);
+
+    try {
+      await markSaleAsDelivered(saleToMarkDelivered.id);
+
+      toast.success("Đã cập nhật trạng thái giao hàng.");
+
+      setSaleToMarkDelivered(null);
+
+      await loadSales();
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, "Không thể cập nhật trạng thái giao hàng.")
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const columns = useMemo<GridColDef<Sale>[]>(
     () => [
       {
@@ -237,6 +271,24 @@ export function SalesManagement() {
         width: 110,
         sortable: false,
         renderCell: ({ row }) => formatDateVi(row.saleDate),
+      },
+      {
+        field: "deliveryAt",
+        headerName: "Ngày giờ giao",
+        width: 170,
+        sortable: true,
+
+        renderCell: ({ row }) => (
+          <Typography
+            variant="body2"
+            sx={{
+              whiteSpace: "normal",
+              lineHeight: 1.4,
+            }}
+          >
+            {formatDateTime(row.deliveryAt)}
+          </Typography>
+        ),
       },
       {
         field: "customerName",
@@ -312,13 +364,43 @@ export function SalesManagement() {
         },
       },
       {
+        field: "isDelivered",
+        headerName: "Trạng thái giao",
+        width: 145,
+        sortable: true,
+
+        renderCell: ({ row }) => (
+          <Chip
+            size="small"
+            color={row.isDelivered ? "success" : "default"}
+            variant={row.isDelivered ? "filled" : "outlined"}
+            label={row.isDelivered ? "Đã giao" : "Chưa giao"}
+          />
+        ),
+      },
+      {
         field: "actions",
         headerName: "Thao tác",
-        width: 275,
+        width: 310,
         sortable: false,
         filterable: false,
         renderCell: ({ row }) => (
-          <Stack direction="row" spacing={0.75}>
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{
+              width: "100%",
+              py: 1,
+              alignItems: "center",
+              flexWrap: "nowrap",
+
+              "& .MuiButton-root": {
+                minWidth: "auto",
+                whiteSpace: "nowrap",
+                px: 1.25,
+              },
+            }}
+          >
             {row.paymentStatus !== "PAID" && (
               <Button
                 size="small"
@@ -338,6 +420,20 @@ export function SalesManagement() {
               onClick={() => setSaleToEdit(row)}
             >
               Sửa
+            </Button>
+
+            <Button
+              type="button"
+              size="small"
+              variant="outlined"
+              color="info"
+              startIcon={<LocalShippingOutlinedIcon />}
+              disabled={row.isDelivered || actionLoading}
+              onClick={() => {
+                setSaleToMarkDelivered(row);
+              }}
+            >
+              Đã giao
             </Button>
 
             <Button
@@ -607,6 +703,52 @@ export function SalesManagement() {
                               </Box>
                             </Box>
 
+                            <Box
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                gap: 2,
+                              }}
+                            >
+                              <Typography color="text.secondary">
+                                Ngày giờ giao
+                              </Typography>
+
+                              <Typography
+                                sx={{
+                                  textAlign: "right",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {formatDateTime(sale.deliveryAt)}
+                              </Typography>
+                            </Box>
+
+                            <Box
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: 2,
+                              }}
+                            >
+                              <Typography color="text.secondary">
+                                Trạng thái giao
+                              </Typography>
+
+                              <Chip
+                                size="small"
+                                color={sale.isDelivered ? "success" : "default"}
+                                variant={
+                                  sale.isDelivered ? "filled" : "outlined"
+                                }
+                                label={
+                                  sale.isDelivered ? "Đã giao" : "Chưa giao"
+                                }
+                              />
+                            </Box>
+
                             {sale.note && (
                               <Typography
                                 variant="caption"
@@ -646,6 +788,25 @@ export function SalesManagement() {
                                 }}
                               >
                                 Chỉnh sửa khoản thu
+                              </Button>
+
+                              <Button
+                                type="button"
+                                variant="outlined"
+                                color="info"
+                                startIcon={<LocalShippingOutlinedIcon />}
+                                fullWidth
+                                disabled={sale.isDelivered || actionLoading}
+                                onClick={() => {
+                                  setSaleToMarkDelivered(sale);
+                                }}
+                                sx={{
+                                  minHeight: 44,
+                                }}
+                              >
+                                {sale.isDelivered
+                                  ? "Đã giao hàng"
+                                  : "Xác nhận đã giao"}
                               </Button>
 
                               <Button
@@ -744,6 +905,28 @@ export function SalesManagement() {
         onClose={() => setSaleToMarkPaid(null)}
         onConfirm={() => {
           void handleMarkPaid();
+        }}
+      />
+
+      <HConfirmDialog
+        open={Boolean(saleToMarkDelivered)}
+        title="Xác nhận đã giao hàng"
+        description={
+          <>
+            Xác nhận đơn hàng của khách{" "}
+            <strong>{saleToMarkDelivered?.customerName}</strong> đã được giao?
+          </>
+        }
+        confirmText="Xác nhận đã giao"
+        confirmColor="success"
+        loading={actionLoading}
+        onClose={() => {
+          if (!actionLoading) {
+            setSaleToMarkDelivered(null);
+          }
+        }}
+        onConfirm={() => {
+          void handleMarkSaleAsDelivered();
         }}
       />
     </Box>

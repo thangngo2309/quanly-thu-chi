@@ -74,3 +74,13 @@ export async function updateSale(
 
   return response.data;
 }
+
+export async function markSaleAsDelivered(
+  id: string
+): Promise<Sale> {
+  const response = await api.patch<Sale>(
+    `/sales/${id}/mark-delivered`
+  );
+
+  return response.data;
+}

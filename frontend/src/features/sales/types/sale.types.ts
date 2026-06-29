@@ -8,6 +8,7 @@ export type SaleFormValues = {
   totalAmount: string;
   paymentStatus: SaleFormPaymentStatus;
   saleDate: string;
+  deliveryAt: string;
   note: string;
 };
 
@@ -17,6 +18,7 @@ export type CreateSalePayload = {
   totalAmount: number;
   paidAmount: number;
   saleDate: string;
+  deliveryAt?: string;
   note?: string;
 };
 
@@ -30,7 +32,12 @@ export type Sale = {
   remainingAmount: number;
 
   paymentStatus: PaymentStatus;
+
   saleDate: string;
+
+  deliveryAt: string | null;
+  isDelivered: boolean;
+
   note: string | null;
 
   pendingDebtPaymentRequestId: string | null;
@@ -61,5 +68,6 @@ export type UpdateSalePayload = {
   totalAmount?: number;
   paidAmount?: number;
   saleDate?: string;
+  deliveryAt?: string | null;
   note?: string | null;
 };

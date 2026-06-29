@@ -88,6 +88,20 @@ export class Sale {
   })
   pendingDebtPaymentRequestId: string | null;
 
+  @Column({
+    name: "delivery_at",
+    type: "timestamptz",
+    nullable: true,
+  })
+  deliveryAt: Date | null;
+  
+  @Column({
+    name: "is_delivered",
+    type: "boolean",
+    default: false,
+  })
+  isDelivered: boolean;
+  
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamptz',
