@@ -1,5 +1,7 @@
 "use client";
 
+import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import {
   Alert,
@@ -11,65 +13,90 @@ import {
   Divider,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
-import axios from "axios";
 import dayjs from "dayjs";
-import { useEffect, useMemo, useState } from "react";
-import { type SubmitHandler, useForm, useWatch } from "react-hook-form";
+import { useEffect, useMemo } from "react";
+import {
+  type SubmitHandler,
+  useFieldArray,
+  useForm,
+  useWatch,
+} from "react-hook-form";
 
-import { HDatePicker, HForm, HInput, HRadio } from "@/components/form";
-import { formatVnd } from "@/utils/currency";
-
-import type { Sale, SaleFormValues } from "../types/sale.types";
 import { createSale } from "@/api/sales.api";
+import { HDatePicker, HForm, HInput, HRadio } from "@/components/form";
 import { HCustomerAutocomplete } from "@/components/form/HCustomerAutocomplete";
 import { useToast } from "@/components/toast/ToastProvider";
 import { getApiErrorMessage } from "@/utils/api-error";
+import { formatVnd } from "@/utils/currency";
 
-const defaultValues: SaleFormValues = {
+import type { SaleFormValues } from "../types/sale.types";
+
+type SaleItemFormValue = {
+  itemName: string;
+  amount: string;
+};
+
+type SaleCreateFormValues = Omit<SaleFormValues, "content" | "totalAmount"> & {
+  items: SaleItemFormValue[];
+};
+
+const createEmptyItem = (): SaleItemFormValue => ({
+  itemName: "",
+  amount: "",
+});
+
+const createDefaultValues = (): SaleCreateFormValues => ({
   customerName: "",
-  content: "",
-  totalAmount: "",
   paymentStatus: "UNPAID",
   saleDate: "",
   deliveryAt: "",
   note: "",
+
+  items: [createEmptyItem()],
+});
+
+const parseAmount = (value: string | number | null | undefined): number => {
+  if (value === null || value === undefined || value === "") {
+    return 0;
+  }
+
+  const normalizedValue = String(value).replace(/[^\d]/g, "");
+
+  if (!normalizedValue) {
+    return 0;
+  }
+
+  const numberValue = Number(normalizedValue);
+
+  return Number.isFinite(numberValue) ? numberValue : 0;
 };
 
-function getErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const responseMessage = error.response?.data?.message;
+const calculateTotalAmount = (items: SaleItemFormValue[]): number =>
+  items.reduce((total, item) => total + parseAmount(item.amount), 0);
 
-    if (Array.isArray(responseMessage)) {
-      return responseMessage.join(", ");
-    }
+const buildContent = (items: SaleItemFormValue[]): string =>
+  items
+    .map((item) => ({
+      itemName: item.itemName.trim(),
 
-    if (typeof responseMessage === "string") {
-      return responseMessage;
-    }
-
-    if (error.code === "ECONNABORTED") {
-      return "Máy chủ phản hồi quá chậm. Vui lòng thử lại.";
-    }
-
-    if (!error.response) {
-      return "Không thể kết nối đến máy chủ.";
-    }
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Đã xảy ra lỗi khi lưu khoản thu.";
-}
+      amount: parseAmount(item.amount),
+    }))
+    .filter((item) => item.itemName.length > 0 && item.amount > 0)
+    .map(
+      (item, index) =>
+        `${index + 1}. ${item.itemName}: ${formatVnd(item.amount)}`
+    )
+    .join("; ");
 
 export function SaleCreateForm() {
   const toast = useToast();
 
-  const methods = useForm<SaleFormValues>({
-    defaultValues,
+  const methods = useForm<SaleCreateFormValues>({
+    defaultValues: createDefaultValues(),
+
     mode: "onBlur",
   });
 
@@ -77,43 +104,97 @@ export function SaleCreateForm() {
     control,
     reset,
     setValue,
+
     formState: { isSubmitting },
   } = methods;
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "items",
+  });
 
   useEffect(() => {
     setValue("saleDate", dayjs().format("YYYY-MM-DD"));
   }, [setValue]);
 
-  const totalAmountValue = useWatch({
-    control,
-    name: "totalAmount",
-  });
+  const items =
+    useWatch({
+      control,
+      name: "items",
+    }) ?? [];
 
   const paymentStatus = useWatch({
     control,
     name: "paymentStatus",
   });
 
-  const totalAmount = useMemo(() => {
-    const value = Number(totalAmountValue);
+  const totalAmount = useMemo(() => calculateTotalAmount(items), [items]);
 
-    return Number.isFinite(value) && value > 0 ? value : 0;
-  }, [totalAmountValue]);
+  const contentPreview = useMemo(() => buildContent(items), [items]);
 
   const paidAmount = paymentStatus === "PAID" ? totalAmount : 0;
 
   const remainingAmount = totalAmount - paidAmount;
 
-  const onSubmit: SubmitHandler<SaleFormValues> = async (values) => {
-    try {
-      const normalizedTotalAmount = Number(values.totalAmount);
+  const handleAddItem = (): void => {
+    append(createEmptyItem());
+  };
 
+  const handleRemoveItem = (index: number): void => {
+    if (fields.length <= 1) {
+      return;
+    }
+
+    remove(index);
+  };
+
+  const handleReset = (): void => {
+    reset({
+      ...createDefaultValues(),
+
+      saleDate: dayjs().format("YYYY-MM-DD"),
+    });
+  };
+
+  const onSubmit: SubmitHandler<SaleCreateFormValues> = async (values) => {
+    const normalizedItems = values.items
+      .map((item) => ({
+        itemName: item.itemName.trim(),
+
+        amount: parseAmount(item.amount),
+      }))
+      .filter((item) => item.itemName.length > 0 && item.amount > 0);
+
+    if (normalizedItems.length === 0) {
+      toast.warning("Vui lòng nhập ít nhất một món hàng.");
+
+      return;
+    }
+
+    const normalizedTotalAmount = normalizedItems.reduce(
+      (total, item) => total + item.amount,
+      0
+    );
+
+    const normalizedContent = normalizedItems
+      .map(
+        (item, index) =>
+          `${index + 1}. ${item.itemName}: ${formatVnd(item.amount)}`
+      )
+      .join("; ");
+
+    try {
       const sale = await createSale({
         customerName: values.customerName.trim(),
-        content: values.content.trim(),
+
+        content: normalizedContent,
+
         totalAmount: normalizedTotalAmount,
+
         paidAmount: values.paymentStatus === "PAID" ? normalizedTotalAmount : 0,
+
         saleDate: values.saleDate,
+
         deliveryAt: values.deliveryAt || undefined,
 
         note: values.note.trim() || undefined,
@@ -121,10 +202,7 @@ export function SaleCreateForm() {
 
       toast.success(`Đã tạo khoản thu của ${sale.customerName} thành công.`);
 
-      reset({
-        ...defaultValues,
-        saleDate: dayjs().format("YYYY-MM-DD"),
-      });
+      handleReset();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không thể lưu khoản thu."));
     }
@@ -149,7 +227,12 @@ export function SaleCreateForm() {
         }}
       >
         <Stack spacing={0.75}>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 800,
+            }}
+          >
             Nhập khoản thu
           </Typography>
 
@@ -174,14 +257,17 @@ export function SaleCreateForm() {
             <Box
               sx={{
                 display: "grid",
+
                 gridTemplateColumns: {
                   xs: "1fr",
+
                   md: "repeat(2, minmax(0, 1fr))",
                 },
+
                 gap: 2,
               }}
             >
-              <HCustomerAutocomplete<SaleFormValues>
+              <HCustomerAutocomplete<SaleCreateFormValues>
                 name="customerName"
                 freeSolo
                 label="Tên khách hàng"
@@ -190,11 +276,11 @@ export function SaleCreateForm() {
                   required: "Vui lòng nhập tên khách hàng",
 
                   validate: (value) =>
-                    value.trim().length > 0 || "Vui lòng nhập tên khách hàng",
+                    (value as string).trim().length > 0 || "Vui lòng nhập tên khách hàng",
                 }}
               />
 
-              <HDatePicker<SaleFormValues>
+              <HDatePicker<SaleCreateFormValues>
                 name="saleDate"
                 label="Ngày phát sinh"
                 rules={{
@@ -203,50 +289,209 @@ export function SaleCreateForm() {
               />
             </Box>
 
-            <HInput<SaleFormValues>
-              name="content"
-              label="Nội dung mua"
-              placeholder="Ví dụ: Mua 10 thùng sản phẩm"
-              multiline
-              minRows={3}
-              rules={{
-                required: "Vui lòng nhập nội dung mua",
-                validate: (value) =>
-                  value.trim().length > 0 || "Vui lòng nhập nội dung mua",
+            <Paper
+              variant="outlined"
+              sx={{
+                p: {
+                  xs: 1.5,
+                  md: 2,
+                },
+
+                borderRadius: 2.5,
+                backgroundColor: "grey.50",
               }}
-            />
+            >
+              <Stack spacing={2}>
+                <Box>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 800,
+                    }}
+                  >
+                    Danh sách món hàng
+                  </Typography>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      mt: 0.25,
+                    }}
+                  >
+                    Nhập tên món hàng và giá tiền tương ứng. Tổng số tiền sẽ
+                    được tự động tính.
+                  </Typography>
+                </Box>
+
+                <Stack spacing={1.5}>
+                  {fields.map((field, index) => (
+                    <Paper
+                      key={field.id}
+                      variant="outlined"
+                      sx={{
+                        p: {
+                          xs: 1.5,
+                          md: 2,
+                        },
+
+                        borderRadius: 2,
+                        backgroundColor: "background.paper",
+                      }}
+                    >
+                      <Stack spacing={1.5}>
+                        <Stack
+                          direction="row"
+                          sx={{
+                            alignItems: "center",
+
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Typography
+                            variant="subtitle2"
+                            sx={{
+                              fontWeight: 800,
+                            }}
+                          >
+                            Món hàng {index + 1}
+                          </Typography>
+
+                          <Button
+                            type="button"
+                            size="small"
+                            color="error"
+                            startIcon={<DeleteOutlineOutlinedIcon />}
+                            disabled={fields.length <= 1}
+                            onClick={() => {
+                              handleRemoveItem(index);
+                            }}
+                          >
+                            Xóa
+                          </Button>
+                        </Stack>
+
+                        <Box
+                          sx={{
+                            display: "grid",
+
+                            gridTemplateColumns: {
+                              xs: "1fr",
+
+                              md: "minmax(0, 1fr) minmax(220px, 0.4fr)",
+                            },
+
+                            gap: 1.5,
+                          }}
+                        >
+                          <HInput<SaleCreateFormValues>
+                            name={`items.${index}.itemName` as const}
+                            label="Tên món hàng"
+                            placeholder="Ví dụ: Gà, bia, cà phê..."
+                            rules={{
+                              required: "Vui lòng nhập tên món hàng",
+
+                              validate: (value) =>
+                                (value as string).trim().length > 0 ||
+                                "Vui lòng nhập tên món hàng",
+                            }}
+                          />
+
+                          <HInput<SaleCreateFormValues>
+                            name={`items.${index}.amount` as const}
+                            label="Giá tiền"
+                            placeholder="Nhập giá tiền"
+                            type="number"
+                            slotProps={{
+                              htmlInput: {
+                                min: 1,
+                                step: 1000,
+                                inputMode: "numeric",
+                              },
+                            }}
+                            rules={{
+                              required: "Vui lòng nhập giá tiền",
+
+                              validate: {
+                                validNumber: (value) =>
+                                  Number.isFinite(Number(value)) ||
+                                  "Số tiền không hợp lệ",
+
+                                greaterThanZero: (value) =>
+                                  Number(value) > 0 || "Số tiền phải lớn hơn 0",
+                              },
+                            }}
+                          />
+                        </Box>
+                      </Stack>
+                    </Paper>
+                  ))}
+                </Stack>
+
+                <Button
+                  type="button"
+                  variant="outlined"
+                  startIcon={<AddOutlinedIcon />}
+                  onClick={handleAddItem}
+                  sx={{
+                    minHeight: 46,
+                    borderStyle: "dashed",
+                  }}
+                >
+                  Thêm món hàng
+                </Button>
+
+                {contentPreview && (
+                  <Alert severity="info" icon={false}>
+                    <Typography variant="caption" color="text.secondary">
+                      Nội dung sẽ lưu:
+                    </Typography>
+
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        mt: 0.5,
+                        fontWeight: 600,
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {contentPreview}
+                    </Typography>
+                  </Alert>
+                )}
+              </Stack>
+            </Paper>
 
             <Box
               sx={{
                 display: "grid",
+
                 gridTemplateColumns: {
                   xs: "1fr",
+
                   md: "repeat(2, minmax(0, 1fr))",
                 },
+
                 gap: 2,
                 alignItems: "start",
               }}
             >
-              <HInput<SaleFormValues>
-                name="totalAmount"
+              <TextField
                 label="Tổng số tiền"
-                placeholder="Nhập số tiền"
-                type="number"
+                value={formatVnd(totalAmount)}
+                disabled
+                fullWidth
+                helperText="Tự động cộng từ danh sách món hàng"
                 slotProps={{
                   htmlInput: {
-                    min: 1,
-                    step: 1000,
                     inputMode: "numeric",
                   },
                 }}
-                rules={{
-                  required: "Vui lòng nhập tổng số tiền",
-                  validate: {
-                    validNumber: (value) =>
-                      Number.isFinite(Number(value)) || "Số tiền không hợp lệ",
+                sx={{
+                  "& .MuiInputBase-input.Mui-disabled": {
+                    WebkitTextFillColor: "text.primary",
 
-                    greaterThanZero: (value) =>
-                      Number(value) > 0 || "Số tiền phải lớn hơn 0",
+                    fontWeight: 800,
                   },
                 }}
               />
@@ -256,20 +501,22 @@ export function SaleCreateForm() {
                 sx={{
                   p: 2,
                   borderRadius: 2,
-                  bgcolor: "grey.50",
+                  backgroundColor: "grey.50",
                 }}
               >
-                <HRadio<SaleFormValues>
+                <HRadio<SaleCreateFormValues>
                   name="paymentStatus"
                   label="Trạng thái thanh toán"
                   row
                   options={[
                     {
                       label: "Chưa thanh toán",
+
                       value: "UNPAID",
                     },
                     {
                       label: "Đã thanh toán",
+
                       value: "PAID",
                     },
                   ]}
@@ -280,7 +527,7 @@ export function SaleCreateForm() {
               </Paper>
             </Box>
 
-            <HDatePicker<SaleFormValues>
+            <HDatePicker<SaleCreateFormValues>
               name="deliveryAt"
               label="Ngày giờ giao hàng"
               mode="datetime"
@@ -288,7 +535,7 @@ export function SaleCreateForm() {
               minutesStep={5}
             />
 
-            <HInput<SaleFormValues>
+            <HInput<SaleCreateFormValues>
               name="note"
               label="Ghi chú"
               placeholder="Thông tin bổ sung nếu có"
@@ -297,6 +544,7 @@ export function SaleCreateForm() {
               rules={{
                 maxLength: {
                   value: 1000,
+
                   message: "Ghi chú không quá 1.000 ký tự",
                 },
               }}
@@ -307,20 +555,29 @@ export function SaleCreateForm() {
               sx={{
                 p: 2,
                 borderRadius: 2,
-                bgcolor: "primary.50",
+                backgroundColor: "primary.50",
               }}
             >
-              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 800 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  mb: 1.5,
+                  fontWeight: 800,
+                }}
+              >
                 Thông tin ghi nhận
               </Typography>
 
               <Box
                 sx={{
                   display: "grid",
+
                   gridTemplateColumns: {
                     xs: "1fr",
+
                     sm: "repeat(3, minmax(0, 1fr))",
                   },
+
                   gap: 2,
                 }}
               >
@@ -329,7 +586,12 @@ export function SaleCreateForm() {
                     Tổng doanh thu
                   </Typography>
 
-                  <Typography sx={{ mt: 0.25, fontWeight: 800 }}>
+                  <Typography
+                    sx={{
+                      mt: 0.25,
+                      fontWeight: 800,
+                    }}
+                  >
                     {formatVnd(totalAmount)}
                   </Typography>
                 </Box>
@@ -341,7 +603,10 @@ export function SaleCreateForm() {
 
                   <Typography
                     color="success.main"
-                    sx={{ mt: 0.25, fontWeight: 800 }}
+                    sx={{
+                      mt: 0.25,
+                      fontWeight: 800,
+                    }}
                   >
                     {formatVnd(paidAmount)}
                   </Typography>
@@ -354,7 +619,10 @@ export function SaleCreateForm() {
 
                   <Typography
                     color={remainingAmount > 0 ? "error.main" : "text.primary"}
-                    sx={{ mt: 0.25, fontWeight: 800 }}
+                    sx={{
+                      mt: 0.25,
+                      fontWeight: 800,
+                    }}
                   >
                     {formatVnd(remainingAmount)}
                   </Typography>
@@ -365,21 +633,19 @@ export function SaleCreateForm() {
             <Stack
               direction={{
                 xs: "column-reverse",
+
                 sm: "row",
               }}
               spacing={1.5}
-              sx={{ justifyContent: "flex-end" }}
+              sx={{
+                justifyContent: "flex-end",
+              }}
             >
               <Button
                 type="button"
                 variant="outlined"
                 disabled={isSubmitting}
-                onClick={() => {
-                  reset({
-                    ...defaultValues,
-                    saleDate: dayjs().format("YYYY-MM-DD"),
-                  });
-                }}
+                onClick={handleReset}
                 sx={{
                   minHeight: 44,
                   minWidth: 120,
@@ -391,7 +657,7 @@ export function SaleCreateForm() {
               <Button
                 type="submit"
                 variant="contained"
-                disabled={isSubmitting}
+                disabled={isSubmitting || totalAmount <= 0}
                 startIcon={
                   isSubmitting ? (
                     <CircularProgress size={18} color="inherit" />
