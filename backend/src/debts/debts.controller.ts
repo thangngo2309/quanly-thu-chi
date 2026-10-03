@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Res,
+  StreamableFile,
+} from '@nestjs/common';
 import type { Response } from 'express';
 
 import { DebtsPdfService } from './debts-pdf.service';
@@ -14,9 +22,7 @@ import { PublicDebtsService } from './public-debts.service';
 export class DebtsController {
   constructor(
     private readonly debtsService: DebtsService,
-
     private readonly debtsPdfService: DebtsPdfService,
-
     private readonly publicDebtsService: PublicDebtsService,
   ) {}
 
@@ -54,9 +60,11 @@ export class DebtsController {
     return this.debtsService.findAll(query);
   }
 
-  @Post('public-link') createPublicDebtLink(
-    @Body() dto: CreatePublicDebtLinkDto,
+  @Post('public-link')
+  createPublicDebtLink(
+    @Body()
+    dto: CreatePublicDebtLinkDto,
   ) {
-    return this.publicDebtsService.createPublicLink(dto);
+    return this.publicDebtsService.createPublicLink(dto.customerName);
   }
 }

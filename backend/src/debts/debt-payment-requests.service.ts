@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DataSource, In } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { randomBytes } from 'node:crypto';
 
 import { User } from '../users/entities/user.entity';
@@ -25,7 +25,6 @@ import { PaymentStatus } from 'src/common/enums/payment-status.enum';
 export class DebtPaymentRequestsService {
   constructor(
     private readonly dataSource: DataSource,
-
     private readonly publicDebtsService: PublicDebtsService,
   ) {}
 
@@ -34,7 +33,7 @@ export class DebtPaymentRequestsService {
     dto: CreatePublicPaymentRequestDto,
   ) {
     const customerName =
-      this.publicDebtsService.resolveAuthorizedCustomer(query);
+      await this.publicDebtsService.resolveAuthorizedCustomer(query);
 
     return this.dataSource.transaction(async (manager) => {
       const saleRepository = manager.getRepository(Sale);
@@ -44,21 +43,21 @@ export class DebtPaymentRequestsService {
         .setLock('pessimistic_write')
         .where(
           `
-                  LOWER(TRIM(sale.customerName))
-                  =
-                  LOWER(TRIM(:customerName))
-                `,
+            LOWER(TRIM(sale.customerName))
+            =
+            LOWER(TRIM(:customerName))
+          `,
           {
             customerName,
           },
         )
         .andWhere(
           `
-                  COALESCE(
-                    sale.remainingAmount,
-                    0
-                  ) > 0
-                `,
+            COALESCE(
+              sale.remainingAmount,
+              0
+            ) > 0
+          `,
         );
 
       if (dto.scope === DebtPaymentRequestScope.SINGLE) {
@@ -105,19 +104,12 @@ export class DebtPaymentRequestsService {
 
       const request = requestRepository.create({
         code: this.generateRequestCode(),
-
         customerName,
-
         scope: dto.scope,
-
         status: DebtPaymentRequestStatus.PENDING,
-
         amount,
-
         reviewedByUserId: null,
-
         reviewedAt: null,
-
         reviewNote: null,
       });
 
@@ -126,9 +118,7 @@ export class DebtPaymentRequestsService {
       const items = sales.map((sale) =>
         itemRepository.create({
           requestId: savedRequest.id,
-
           saleId: sale.id,
-
           requestedAmount: Number(sale.remainingAmount),
         }),
       );
@@ -243,11 +233,8 @@ export class DebtPaymentRequestsService {
         }
 
         sale.paidAmount = Number(sale.totalAmount);
-
         sale.remainingAmount = 0;
-
         sale.paymentStatus = PaymentStatus.PAID;
-
         sale.pendingDebtPaymentRequestId = null;
       }
 
@@ -256,20 +243,15 @@ export class DebtPaymentRequestsService {
       request.status = DebtPaymentRequestStatus.APPROVED;
 
       request.reviewedByUserId = currentUser.id;
-
       request.reviewedAt = new Date();
-
       request.reviewNote = dto.note?.trim() || null;
 
       await requestRepository.save(request);
 
       return {
         message: 'Đã xác nhận thanh toán thành công',
-
         requestId: request.id,
-
         paidSales: sales.length,
-
         amount: Number(request.amount),
       };
     });
@@ -282,41 +264,61 @@ export class DebtPaymentRequestsService {
   ) {
     return this.dataSource.transaction(async (manager) => {
       const requestRepository = manager.getRepository(DebtPaymentRequest);
+
       const itemRepository = manager.getRepository(DebtPaymentRequestItem);
+
       const saleRepository = manager.getRepository(Sale);
+
       const request = await requestRepository
         .createQueryBuilder('request')
         .setLock('pessimistic_write')
-        .where('request.id = :id', { id })
+        .where('request.id = :id', {
+          id,
+        })
         .getOne();
+
       if (!request) {
         throw new NotFoundException('Không tìm thấy yêu cầu thanh toán');
       }
+
       if (request.status !== DebtPaymentRequestStatus.PENDING) {
         throw new ConflictException('Yêu cầu thanh toán này đã được xử lý');
       }
+
       const requestItems = await itemRepository.find({
-        where: { requestId: request.id },
+        where: {
+          requestId: request.id,
+        },
       });
+
       const saleIds = requestItems.map((item) => item.saleId);
+
       if (saleIds.length > 0) {
         const sales = await saleRepository
           .createQueryBuilder('sale')
           .setLock('pessimistic_write')
-          .where('sale.id IN (:...saleIds)', { saleIds })
+          .where('sale.id IN (:...saleIds)', {
+            saleIds,
+          })
           .getMany();
+
         for (const sale of sales) {
           if (sale.pendingDebtPaymentRequestId === request.id) {
             sale.pendingDebtPaymentRequestId = null;
           }
         }
+
         await saleRepository.save(sales);
       }
+
       request.status = DebtPaymentRequestStatus.REJECTED;
+
       request.reviewedByUserId = currentUser.id;
       request.reviewedAt = new Date();
       request.reviewNote = dto.note?.trim() || null;
+
       await requestRepository.save(request);
+
       return {
         message: 'Đã từ chối yêu cầu thanh toán',
         requestId: request.id,
