@@ -4,18 +4,32 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+
+import { createHmac, timingSafeEqual } from 'crypto';
+
 import { Repository } from 'typeorm';
 
 import { Sale } from '../sales/entities/sale.entity';
-import { CreatePublicDebtLinkDto } from './dto/create-public-debt-link.dto';
-import { PublicDebtQueryDto } from './dto/public-debt-query.dto';
 
 type PublicDebtTokenPayload = {
   customerName: string;
-  exp: number;
+
+  /**
+   * Giữ optional để tương thích với token cũ.
+   *
+   * Token mới sẽ KHÔNG tạo exp nữa.
+   * Token cũ có exp vẫn được chấp nhận,
+   * nhưng hệ thống không kiểm tra thời hạn.
+   */
+  exp?: number;
+};
+
+type PublicDebtAccessQuery = {
+  customerName: string;
+  token: string;
 };
 
 @Injectable()
@@ -27,184 +41,351 @@ export class PublicDebtsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async createPublicLink(dto: CreatePublicDebtLinkDto) {
-    const customerName = dto.customerName.trim();
+  /**
+   * ============================================================
+   * CREATE PUBLIC LINK
+   * ============================================================
+   *
+   * Tạo token cho trang công nợ của khách hàng.
+   *
+   * Trước đây token có:
+   *
+   * {
+   *   customerName,
+   *   exp
+   * }
+   *
+   * Từ phiên bản này token chỉ còn:
+   *
+   * {
+   *   customerName
+   * }
+   *
+   * => Token không hết hạn.
+   */
+  async createPublicLink(customerName: string): Promise<{
+    customerName: string;
+    token: string;
+  }> {
+    const normalizedCustomerName = customerName.trim();
 
-    const canonicalCustomerName =
-      await this.findCanonicalCustomerName(customerName);
+    if (!normalizedCustomerName) {
+      throw new NotFoundException('Không xác định được khách hàng.');
+    }
 
-    const ttlDays = Number(
-      this.configService.get<string>('PUBLIC_DEBT_LINK_TTL_DAYS') ?? 30,
+    const canonicalCustomerName = await this.findCanonicalCustomerName(
+      normalizedCustomerName,
     );
 
-    const expiresAt = Date.now() + ttlDays * 24 * 60 * 60 * 1000;
+    if (!canonicalCustomerName) {
+      throw new NotFoundException(
+        `Không tìm thấy dữ liệu của khách hàng ${normalizedCustomerName}.`,
+      );
+    }
 
     const token = this.createToken({
       customerName: canonicalCustomerName,
-      exp: expiresAt,
     });
 
     return {
       customerName: canonicalCustomerName,
       token,
-      expiresAt: new Date(expiresAt).toISOString(),
     };
   }
 
-  async getPublicDebtOverview(query: PublicDebtQueryDto) {
-    const customerName = this.resolveAuthorizedCustomer(query);
+  /**
+   * ============================================================
+   * GET PUBLIC DEBT OVERVIEW
+   * ============================================================
+   *
+   * Giữ logic lấy công nợ như hiện tại.
+   *
+   * Điểm quan trọng:
+   * - customerName + token phải được xác thực trước.
+   * - token mới không hết hạn.
+   * - token cũ có exp vẫn dùng được.
+   */
+  async getPublicDebtOverview(query: PublicDebtAccessQuery): Promise<{
+    customerName: string;
+    items: Sale[];
+    summary: {
+      totalOrders: number;
+      totalRevenue: number;
+      totalCollected: number;
+      totalDebt: number;
+    };
+  }> {
+    const customerName = await this.resolveAuthorizedCustomer(query);
 
-    const payload = this.verifyToken(query.token);
+    const normalizedCustomerName = this.normalizeCustomerName(customerName);
 
-    if (
-      this.normalizeCustomerName(payload.customerName) !==
-      this.normalizeCustomerName(customerName)
-    ) {
-      throw new ForbiddenException('Đường dẫn công nợ không hợp lệ');
-    }
-
-    const sales = await this.saleRepository
+    const items = await this.saleRepository
       .createQueryBuilder('sale')
-      .where(`COALESCE(sale.remainingAmount, 0) > 0`)
-      .andWhere(
-        `
-              LOWER(TRIM(sale.customerName))
-              =
-              LOWER(TRIM(:customerName))
-            `,
-        {
-          customerName: payload.customerName,
-        },
-      )
-      .orderBy('sale.saleDate', 'ASC')
-      .addOrderBy('sale.createdAt', 'ASC')
+      .where(`LOWER(TRIM(sale."customerName")) = :customerName`, {
+        customerName: normalizedCustomerName,
+      })
+      .andWhere(`sale."remainingAmount" > 0`)
+      .orderBy(`sale."saleDate"`, 'ASC')
+      .addOrderBy(`sale."id"`, 'ASC')
       .getMany();
 
-    const summary = sales.reduce(
-      (result, sale) => ({
-        totalOrders: result.totalOrders + 1,
+    const summary = items.reduce(
+      (result, item) => {
+        result.totalOrders += 1;
 
-        totalAmount: result.totalAmount + Number(sale.totalAmount ?? 0),
+        result.totalRevenue += Number(item.totalAmount ?? 0);
 
-        totalPaid: result.totalPaid + Number(sale.paidAmount ?? 0),
+        result.totalCollected += Number(item.paidAmount ?? 0);
 
-        totalDebt: result.totalDebt + Number(sale.remainingAmount ?? 0),
-      }),
+        result.totalDebt += Number(item.remainingAmount ?? 0);
+
+        return result;
+      },
       {
         totalOrders: 0,
-        totalAmount: 0,
-        totalPaid: 0,
+        totalRevenue: 0,
+        totalCollected: 0,
         totalDebt: 0,
       },
     );
 
     return {
-      customerName: payload.customerName,
-
-      generatedAt: new Date().toISOString(),
-
+      customerName,
+      items,
       summary,
-
-      items: sales.map((sale) => ({
-        saleId: sale.id,
-        saleDate: sale.saleDate,
-        content: sale.content,
-        totalAmount: Number(sale.totalAmount),
-        paidAmount: Number(sale.paidAmount),
-        remainingAmount: Number(sale.remainingAmount),
-        paymentStatus: sale.paymentStatus,
-        confirmationStatus: sale.pendingDebtPaymentRequestId
-          ? 'PENDING'
-          : 'NONE',
-      })),
     };
   }
 
-  private async findCanonicalCustomerName(
-    customerName: string,
+  /**
+   * ============================================================
+   * RESOLVE AUTHORIZED CUSTOMER
+   * ============================================================
+   *
+   * Method này được public để:
+   *
+   * - GET /public/debts
+   * - POST /public/debts/payment-requests
+   * - GET /public/debts/export-pdf
+   *
+   * cùng dùng chung một cơ chế xác thực.
+   */
+  async resolveAuthorizedCustomer(
+    query: PublicDebtAccessQuery,
   ): Promise<string> {
-    const result = await this.saleRepository
-      .createQueryBuilder('sale')
-      .select('sale.customerName', 'customerName')
-      .where(
-        `
-              LOWER(TRIM(sale.customerName))
-              =
-              LOWER(TRIM(:customerName))
-            `,
-        {
-          customerName,
-        },
-      )
-      .orderBy('sale.createdAt', 'DESC')
-      .getRawOne<{
-        customerName: string;
-      }>();
+    const customerName = query.customerName?.trim();
+    const token = query.token?.trim();
 
-    const canonicalName = result?.customerName?.trim();
-
-    if (!canonicalName) {
-      throw new NotFoundException('Không tìm thấy khách hàng');
+    if (!customerName || !token) {
+      throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
     }
 
-    return canonicalName;
+    const payload = this.verifyToken(token);
+
+    const requestCustomerName = this.normalizeCustomerName(customerName);
+
+    const tokenCustomerName = this.normalizeCustomerName(payload.customerName);
+
+    if (requestCustomerName !== tokenCustomerName) {
+      throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
+    }
+
+    const canonicalCustomerName =
+      await this.findCanonicalCustomerName(customerName);
+
+    if (!canonicalCustomerName) {
+      throw new NotFoundException(
+        'Không tìm thấy thông tin công nợ của khách hàng.',
+      );
+    }
+
+    /**
+     * Kiểm tra lần nữa bằng tên canonical trong DB.
+     */
+    if (
+      this.normalizeCustomerName(canonicalCustomerName) !== tokenCustomerName
+    ) {
+      throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
+    }
+
+    return canonicalCustomerName;
   }
 
+  /**
+   * ============================================================
+   * FIND CANONICAL CUSTOMER NAME
+   * ============================================================
+   *
+   * Ví dụ DB lưu:
+   *
+   *   Công ty ABC
+   *
+   * request:
+   *
+   *   công ty abc
+   *
+   * vẫn trả lại:
+   *
+   *   Công ty ABC
+   */
+  private async findCanonicalCustomerName(
+    customerName: string,
+  ): Promise<string | null> {
+    const normalizedCustomerName = this.normalizeCustomerName(customerName);
+
+    if (!normalizedCustomerName) {
+      return null;
+    }
+
+    const sale = await this.saleRepository
+      .createQueryBuilder('sale')
+      .select(`sale."customerName"`, 'customerName')
+      .where(`LOWER(TRIM(sale."customerName")) = :customerName`, {
+        customerName: normalizedCustomerName,
+      })
+      .orderBy(`sale."id"`, 'DESC')
+      .getRawOne<{
+        customerName?: string;
+      }>();
+
+    const result = sale?.customerName?.trim();
+
+    return result || null;
+  }
+
+  /**
+   * ============================================================
+   * CREATE TOKEN
+   * ============================================================
+   *
+   * TOKEN MỚI KHÔNG CÒN EXP.
+   *
+   * Format:
+   *
+   * base64url(payload).signature
+   *
+   * payload:
+   *
+   * {
+   *   "customerName": "Khách hàng A"
+   * }
+   */
   private createToken(payload: PublicDebtTokenPayload): string {
-    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString(
-      'base64url',
-    );
+    const tokenPayload: PublicDebtTokenPayload = {
+      customerName: payload.customerName.trim(),
+    };
+
+    const encodedPayload = Buffer.from(
+      JSON.stringify(tokenPayload),
+      'utf8',
+    ).toString('base64url');
 
     const signature = this.createSignature(encodedPayload);
 
     return `${encodedPayload}.${signature}`;
   }
 
+  /**
+   * ============================================================
+   * VERIFY TOKEN
+   * ============================================================
+   *
+   * Quan trọng:
+   *
+   * KHÔNG kiểm tra payload.exp nữa.
+   *
+   * Nhờ đó:
+   *
+   * 1. Token mới không có exp -> dùng vĩnh viễn.
+   *
+   * 2. Token cũ:
+   *
+   * {
+   *   customerName,
+   *   exp
+   * }
+   *
+   * vẫn dùng được kể cả exp đã qua.
+   *
+   * Chữ ký HMAC vẫn được kiểm tra bình thường nên người dùng
+   * không thể tự sửa customerName trong token.
+   */
   private verifyToken(token: string): PublicDebtTokenPayload {
-    const [encodedPayload, receivedSignature] = token.split('.');
+    const parts = token.split('.');
+
+    if (parts.length !== 2) {
+      throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
+    }
+
+    const [encodedPayload, receivedSignature] = parts;
 
     if (!encodedPayload || !receivedSignature) {
-      throw new ForbiddenException('Đường dẫn công nợ không hợp lệ');
+      throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
     }
 
     const expectedSignature = this.createSignature(encodedPayload);
 
-    const receivedBuffer = Buffer.from(receivedSignature);
+    const receivedBuffer = Buffer.from(receivedSignature, 'utf8');
 
-    const expectedBuffer = Buffer.from(expectedSignature);
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
 
     if (
       receivedBuffer.length !== expectedBuffer.length ||
       !timingSafeEqual(receivedBuffer, expectedBuffer)
     ) {
-      throw new ForbiddenException('Đường dẫn công nợ không hợp lệ');
+      throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
     }
 
     let payload: PublicDebtTokenPayload;
 
     try {
-      payload = JSON.parse(
-        Buffer.from(encodedPayload, 'base64url').toString('utf8'),
-      ) as PublicDebtTokenPayload;
+      const decodedPayload = Buffer.from(encodedPayload, 'base64url').toString(
+        'utf8',
+      );
+
+      payload = JSON.parse(decodedPayload) as PublicDebtTokenPayload;
     } catch {
-      throw new ForbiddenException('Đường dẫn công nợ không hợp lệ');
+      throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
     }
 
-    if (!payload.customerName || !payload.exp || payload.exp < Date.now()) {
-      throw new ForbiddenException(
-        'Đường dẫn công nợ đã hết hạn hoặc không hợp lệ',
-      );
+    if (
+      !payload ||
+      typeof payload.customerName !== 'string' ||
+      !payload.customerName.trim()
+    ) {
+      throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
     }
+
+    /**
+     * ==========================================================
+     * KHÔNG KIỂM TRA EXP
+     * ==========================================================
+     *
+     * Code cũ có dạng:
+     *
+     * if (!payload.exp || payload.exp < Date.now()) {
+     *   throw new ForbiddenException(...);
+     * }
+     *
+     * ĐÃ BỎ.
+     *
+     * payload.exp vẫn được phép tồn tại để các token cũ
+     * tiếp tục xác thực thành công.
+     */
 
     return payload;
   }
 
+  /**
+   * ============================================================
+   * CREATE SIGNATURE
+   * ============================================================
+   */
   private createSignature(encodedPayload: string): string {
     const secret = this.configService.get<string>('PUBLIC_DEBT_LINK_SECRET');
 
-    if (!secret) {
+    if (!secret?.trim()) {
       throw new InternalServerErrorException(
-        'Chưa cấu hình PUBLIC_DEBT_LINK_SECRET',
+        'Chưa cấu hình PUBLIC_DEBT_LINK_SECRET.',
       );
     }
 
@@ -213,22 +394,12 @@ export class PublicDebtsService {
       .digest('base64url');
   }
 
+  /**
+   * ============================================================
+   * NORMALIZE CUSTOMER NAME
+   * ============================================================
+   */
   private normalizeCustomerName(value: string): string {
     return value.trim().toLocaleLowerCase('vi-VN');
-  }
-
-  resolveAuthorizedCustomer(query: PublicDebtQueryDto): string {
-    const customerName = query.customerName.trim();
-
-    const payload = this.verifyToken(query.token);
-
-    if (
-      this.normalizeCustomerName(payload.customerName) !==
-      this.normalizeCustomerName(customerName)
-    ) {
-      throw new ForbiddenException('Đường dẫn công nợ không hợp lệ');
-    }
-
-    return payload.customerName.trim();
   }
 }
