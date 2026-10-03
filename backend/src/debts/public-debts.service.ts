@@ -4,12 +4,9 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-
 import { createHmac, timingSafeEqual } from 'crypto';
-
 import { Repository } from 'typeorm';
 
 import { Sale } from '../sales/entities/sale.entity';
@@ -20,8 +17,8 @@ type PublicDebtTokenPayload = {
   /**
    * Giữ optional để tương thích với token cũ.
    *
-   * Token mới sẽ KHÔNG tạo exp nữa.
-   * Token cũ có exp vẫn được chấp nhận,
+   * Token mới không tạo exp nữa.
+   * Token cũ có exp vẫn tiếp tục được chấp nhận,
    * nhưng hệ thống không kiểm tra thời hạn.
    */
   exp?: number;
@@ -46,22 +43,13 @@ export class PublicDebtsService {
    * CREATE PUBLIC LINK
    * ============================================================
    *
-   * Tạo token cho trang công nợ của khách hàng.
+   * Token mới không có thời hạn.
    *
-   * Trước đây token có:
-   *
-   * {
-   *   customerName,
-   *   exp
-   * }
-   *
-   * Từ phiên bản này token chỉ còn:
+   * Payload:
    *
    * {
-   *   customerName
+   *   customerName: "Tên khách hàng"
    * }
-   *
-   * => Token không hết hạn.
    */
   async createPublicLink(customerName: string): Promise<{
     customerName: string;
@@ -97,13 +85,6 @@ export class PublicDebtsService {
    * ============================================================
    * GET PUBLIC DEBT OVERVIEW
    * ============================================================
-   *
-   * Giữ logic lấy công nợ như hiện tại.
-   *
-   * Điểm quan trọng:
-   * - customerName + token phải được xác thực trước.
-   * - token mới không hết hạn.
-   * - token cũ có exp vẫn dùng được.
    */
   async getPublicDebtOverview(query: PublicDebtAccessQuery): Promise<{
     customerName: string;
@@ -117,16 +98,43 @@ export class PublicDebtsService {
   }> {
     const customerName = await this.resolveAuthorizedCustomer(query);
 
-    const normalizedCustomerName = this.normalizeCustomerName(customerName);
-
+    /**
+     * Không dùng:
+     *
+     * sale."customerName"
+     * sale."remainingAmount"
+     *
+     * vì đây là tên property TypeScript chứ không phải
+     * tên column thật trong PostgreSQL.
+     *
+     * Dùng property path của TypeORM để TypeORM tự map:
+     *
+     * customerName -> customer_name
+     * remainingAmount -> remaining_amount
+     * saleDate -> sale_date
+     */
     const items = await this.saleRepository
       .createQueryBuilder('sale')
-      .where(`LOWER(TRIM(sale."customerName")) = :customerName`, {
-        customerName: normalizedCustomerName,
-      })
-      .andWhere(`sale."remainingAmount" > 0`)
-      .orderBy(`sale."saleDate"`, 'ASC')
-      .addOrderBy(`sale."id"`, 'ASC')
+      .where(
+        `
+          LOWER(TRIM(sale.customerName))
+          =
+          LOWER(TRIM(:customerName))
+        `,
+        {
+          customerName,
+        },
+      )
+      .andWhere(
+        `
+          COALESCE(
+            sale.remainingAmount,
+            0
+          ) > 0
+        `,
+      )
+      .orderBy('sale.saleDate', 'ASC')
+      .addOrderBy('sale.id', 'ASC')
       .getMany();
 
     const summary = items.reduce(
@@ -161,18 +169,17 @@ export class PublicDebtsService {
    * RESOLVE AUTHORIZED CUSTOMER
    * ============================================================
    *
-   * Method này được public để:
+   * Dùng chung cho:
    *
-   * - GET /public/debts
-   * - POST /public/debts/payment-requests
-   * - GET /public/debts/export-pdf
-   *
-   * cùng dùng chung một cơ chế xác thực.
+   * GET /public/debts
+   * POST /public/debts/payment-requests
+   * GET /public/debts/export-pdf
    */
   async resolveAuthorizedCustomer(
     query: PublicDebtAccessQuery,
   ): Promise<string> {
     const customerName = query.customerName?.trim();
+
     const token = query.token?.trim();
 
     if (!customerName || !token) {
@@ -185,10 +192,27 @@ export class PublicDebtsService {
 
     const tokenCustomerName = this.normalizeCustomerName(payload.customerName);
 
+    /**
+     * customerName trên URL phải đúng với
+     * customerName nằm trong token.
+     */
     if (requestCustomerName !== tokenCustomerName) {
       throw new ForbiddenException('Liên kết công nợ không hợp lệ.');
     }
 
+    /**
+     * Lấy lại tên khách hàng canonical từ DB.
+     *
+     * Ví dụ:
+     *
+     * URL:
+     * c508
+     *
+     * DB:
+     * C508
+     *
+     * thì hệ thống trả lại đúng giá trị trong DB.
+     */
     const canonicalCustomerName =
       await this.findCanonicalCustomerName(customerName);
 
@@ -199,7 +223,8 @@ export class PublicDebtsService {
     }
 
     /**
-     * Kiểm tra lần nữa bằng tên canonical trong DB.
+     * Kiểm tra lần cuối tên trong DB
+     * phải khớp tên trong token.
      */
     if (
       this.normalizeCustomerName(canonicalCustomerName) !== tokenCustomerName
@@ -215,22 +240,20 @@ export class PublicDebtsService {
    * FIND CANONICAL CUSTOMER NAME
    * ============================================================
    *
-   * Ví dụ DB lưu:
+   * Quan trọng:
    *
-   *   Công ty ABC
+   * Không dùng:
    *
-   * request:
+   * .select(`sale."customerName"`)
    *
-   *   công ty abc
+   * vì PostgreSQL thực tế dùng customer_name.
    *
-   * vẫn trả lại:
-   *
-   *   Công ty ABC
+   * Ở đây lấy entity trực tiếp để TypeORM tự map column.
    */
   private async findCanonicalCustomerName(
     customerName: string,
   ): Promise<string | null> {
-    const normalizedCustomerName = this.normalizeCustomerName(customerName);
+    const normalizedCustomerName = customerName.trim();
 
     if (!normalizedCustomerName) {
       return null;
@@ -238,14 +261,18 @@ export class PublicDebtsService {
 
     const sale = await this.saleRepository
       .createQueryBuilder('sale')
-      .select(`sale."customerName"`, 'customerName')
-      .where(`LOWER(TRIM(sale."customerName")) = :customerName`, {
-        customerName: normalizedCustomerName,
-      })
-      .orderBy(`sale."id"`, 'DESC')
-      .getRawOne<{
-        customerName?: string;
-      }>();
+      .where(
+        `
+          LOWER(TRIM(sale.customerName))
+          =
+          LOWER(TRIM(:customerName))
+        `,
+        {
+          customerName: normalizedCustomerName,
+        },
+      )
+      .orderBy('sale.id', 'DESC')
+      .getOne();
 
     const result = sale?.customerName?.trim();
 
@@ -257,16 +284,16 @@ export class PublicDebtsService {
    * CREATE TOKEN
    * ============================================================
    *
-   * TOKEN MỚI KHÔNG CÒN EXP.
+   * Token mới KHÔNG có exp.
    *
    * Format:
    *
    * base64url(payload).signature
    *
-   * payload:
+   * Payload:
    *
    * {
-   *   "customerName": "Khách hàng A"
+   *   "customerName": "C508"
    * }
    */
   private createToken(payload: PublicDebtTokenPayload): string {
@@ -289,25 +316,22 @@ export class PublicDebtsService {
    * VERIFY TOKEN
    * ============================================================
    *
-   * Quan trọng:
+   * Token mới:
    *
-   * KHÔNG kiểm tra payload.exp nữa.
+   * {
+   *   customerName
+   * }
    *
-   * Nhờ đó:
-   *
-   * 1. Token mới không có exp -> dùng vĩnh viễn.
-   *
-   * 2. Token cũ:
+   * Token cũ:
    *
    * {
    *   customerName,
    *   exp
    * }
    *
-   * vẫn dùng được kể cả exp đã qua.
+   * Cả hai đều được chấp nhận.
    *
-   * Chữ ký HMAC vẫn được kiểm tra bình thường nên người dùng
-   * không thể tự sửa customerName trong token.
+   * exp của token cũ KHÔNG còn được kiểm tra.
    */
   private verifyToken(token: string): PublicDebtTokenPayload {
     const parts = token.split('.');
@@ -328,6 +352,10 @@ export class PublicDebtsService {
 
     const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
 
+    /**
+     * timingSafeEqual yêu cầu hai Buffer
+     * có cùng length.
+     */
     if (
       receivedBuffer.length !== expectedBuffer.length ||
       !timingSafeEqual(receivedBuffer, expectedBuffer)
@@ -356,20 +384,16 @@ export class PublicDebtsService {
     }
 
     /**
-     * ==========================================================
-     * KHÔNG KIỂM TRA EXP
-     * ==========================================================
+     * QUAN TRỌNG:
      *
-     * Code cũ có dạng:
+     * Không kiểm tra payload.exp.
      *
-     * if (!payload.exp || payload.exp < Date.now()) {
-     *   throw new ForbiddenException(...);
-     * }
+     * Điều này giúp:
      *
-     * ĐÃ BỎ.
-     *
-     * payload.exp vẫn được phép tồn tại để các token cũ
-     * tiếp tục xác thực thành công.
+     * - token mới không hết hạn;
+     * - token cũ dù exp đã qua vẫn dùng được;
+     * - chữ ký HMAC vẫn được kiểm tra,
+     *   nên người dùng không thể tự thay customerName.
      */
 
     return payload;
